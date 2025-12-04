@@ -1,0 +1,5 @@
+{
+  "name": "Formulario de Declaración SRI",
+  "description": "Una aplicación para llenar manualmente, validar y exportar un formulario de declaración de IVA del SRI Ecuador.",
+  "requestFramePermissions": []
+}
