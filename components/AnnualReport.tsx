@@ -165,7 +165,7 @@ const AnnualReport: React.FC = () => {
         }
     };
     
-    const handleExportPdf = () => {
+    const handleExportPdf = (mode: 'full' | 'net') => {
         setIsExportMenuOpen(false);
         const jspdf = getJsPDF();
         if (!jspdf) {
@@ -176,10 +176,12 @@ const AnnualReport: React.FC = () => {
         // Use Landscape orientation ('l')
         const doc = new jsPDF({ orientation: 'landscape' });
         const year = monthlyData.length > 0 ? monthlyData[0].year : new Date().getFullYear();
+        const titleSuffix = mode === 'net' ? '(Solo Netos)' : '';
+        const fileName = mode === 'net' ? `reporte_anual_iva_${year}_neto.pdf` : `reporte_anual_iva_${year}_consolidado.pdf`;
 
         doc.setFontSize(18);
         doc.setTextColor(0, 51, 102); // sri-blue
-        doc.text("Reporte Anual Consolidado de IVA", 14, 20);
+        doc.text(`Reporte Anual Consolidado de IVA ${titleSuffix}`, 14, 20);
         
         doc.setFontSize(11);
         doc.setTextColor(50);
@@ -209,11 +211,20 @@ const AnnualReport: React.FC = () => {
             const tableBody: (string | number)[][] = [];
 
             structure.rows.forEach(row => {
-                // We will create a row for Bruto and a row for Neto if they exist
-                const fieldTypes = [
-                    { field: row.fields[0], suffix: '' }, // Bruto usually primary
-                    { field: row.fields[1], suffix: ' (Neto)' } // Neto usually secondary
-                ];
+                let fieldTypes;
+                
+                if (mode === 'full') {
+                     // We will create a row for Bruto and a row for Neto if they exist
+                     fieldTypes = [
+                        { field: row.fields[0], suffix: '' }, // Bruto usually primary
+                        { field: row.fields[1], suffix: ' (Neto)' } // Neto usually secondary
+                    ];
+                } else {
+                     // Net Only: Only take the second field
+                     fieldTypes = [
+                         { field: row.fields[1], suffix: '' }
+                     ];
+                }
 
                 fieldTypes.forEach(({ field, suffix }) => {
                     if (field) {
@@ -285,7 +296,7 @@ const AnnualReport: React.FC = () => {
             }
         });
 
-        doc.save(`reporte_anual_iva_${year}_horizontal.pdf`);
+        doc.save(fileName);
     };
 
     const exportToExcel = (mode: 'full' | 'net') => {
@@ -592,12 +603,20 @@ const AnnualReport: React.FC = () => {
                                 <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-50">
                                     <div className="py-1" role="menu" aria-orientation="vertical">
                                         <button
-                                            onClick={handleExportPdf}
+                                            onClick={() => handleExportPdf('full')}
                                             className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center"
                                             role="menuitem"
                                         >
                                             <FileTextIcon className="w-4 h-4 mr-3 text-red-500" />
-                                            Exportar a PDF
+                                            Exportar a PDF (Detallado)
+                                        </button>
+                                        <button
+                                            onClick={() => handleExportPdf('net')}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center"
+                                            role="menuitem"
+                                        >
+                                            <FileTextIcon className="w-4 h-4 mr-3 text-blue-500" />
+                                            Exportar a PDF (Solo Netos)
                                         </button>
                                         <button
                                             onClick={() => exportToExcel('full')}
