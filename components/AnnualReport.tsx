@@ -3,27 +3,19 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { formStructure, FormField } from '../data/formStructure';
 import { parsePdfText } from '../services/pdfParser';
 import { extractDataWithRules } from '../services/ruleBasedParser';
-import { UploadIcon, LoaderIcon, AlertTriangleIcon, ClipboardListIcon, FileTextIcon, FileSpreadsheetIcon, DownloadIcon, ChevronDownIcon } from './icons';
+import { UploadIcon, LoaderIcon, AlertTriangleIcon, ClipboardListIcon, FileTextIcon, FileSpreadsheetIcon, DownloadIcon, ChevronDownIcon, TrashIcon } from './icons';
 
-// Declarations for libraries loaded from CDN
-declare const jspdf: any;
-declare const XLSX: any;
-
-interface jsPDFWithAutoTable {
-  autoTable: (options: any) => jsPDFWithAutoTable;
-  setFontSize(size: number): jsPDFWithAutoTable;
-  setTextColor(r: number, g?: number, b?: number): jsPDFWithAutoTable;
-  text(text: string | string[], x: number, y: number, options?: any): jsPDFWithAutoTable;
-  save(filename: string): void;
-  [key: string]: any;
-}
-
+// Access globals via window to avoid declaration conflicts with TaxForm.tsx
+const getJsPDF = () => (window as any).jspdf;
+const getXLSX = () => (window as any).XLSX;
 
 interface MonthlyData {
     month: string;
     year: string;
     fileName: string;
     data: Record<string, number>;
+    identificacion?: string;
+    razonSocial?: string;
 }
 
 const MONTHS_ORDER = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
@@ -58,6 +50,9 @@ const AnnualReport: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+    const [ruc, setRuc] = useState<string>('');
+    const [razonSocial, setRazonSocial] = useState<string>('');
+    
     const exportMenuRef = useRef<HTMLDivElement>(null);
 
     // Close export menu when clicking outside
@@ -95,13 +90,25 @@ const AnnualReport: React.FC = () => {
         return totals;
     }, [monthlyData]);
 
+    const handleClearData = () => {
+        if (window.confirm("¿Está seguro que desea borrar todos los datos cargados?")) {
+            setMonthlyData([]);
+            setActiveMonthTab('');
+            setRuc('');
+            setRazonSocial('');
+            setError(null);
+        }
+    };
+
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
         setIsProcessing(true);
         setError(null);
-        setMonthlyData([]);
+        // We generally want to append or replace? For simplicity, replacing or merging could be complex.
+        // Assuming user wants to reload everything usually. But let's keep it simple: reset first.
+        setMonthlyData([]); 
 
         const processFile = async (file: File): Promise<MonthlyData | null> => {
             try {
@@ -112,7 +119,14 @@ const AnnualReport: React.FC = () => {
                     return null;
                 }
                 const [month, year] = extracted.periodo.split(' ');
-                return { month, year, fileName: file.name, data: extracted.data };
+                return { 
+                    month, 
+                    year, 
+                    fileName: file.name, 
+                    data: extracted.data,
+                    identificacion: extracted.identificacion,
+                    razonSocial: extracted.razonSocial
+                };
             } catch (err) {
                 console.error(`Failed to process ${file.name}:`, err);
                 return null;
@@ -126,6 +140,13 @@ const AnnualReport: React.FC = () => {
             if (validData.length === 0 && files.length > 0) {
                  throw new Error("No se pudo extraer datos válidos de ninguno de los archivos. Verifique que sean declaraciones de IVA.");
             }
+
+            // Autofill RUC and Razon Social if found and currently empty
+            const foundRuc = validData.find(d => d.identificacion)?.identificacion;
+            const foundName = validData.find(d => d.razonSocial)?.razonSocial;
+            
+            if (foundRuc && !ruc) setRuc(foundRuc);
+            if (foundName && !razonSocial) setRazonSocial(foundName);
 
             validData.sort((a, b) => MONTHS_ORDER.indexOf(a.month) - MONTHS_ORDER.indexOf(b.month));
             setMonthlyData(validData);
@@ -146,20 +167,37 @@ const AnnualReport: React.FC = () => {
     
     const handleExportPdf = () => {
         setIsExportMenuOpen(false);
+        const jspdf = getJsPDF();
+        if (!jspdf) {
+            setError("La librería jsPDF no está cargada.");
+            return;
+        }
         const { jsPDF } = jspdf;
         // Use Landscape orientation ('l')
-        const doc = new jsPDF({ orientation: 'landscape' }) as jsPDFWithAutoTable;
+        const doc = new jsPDF({ orientation: 'landscape' });
         const year = monthlyData.length > 0 ? monthlyData[0].year : new Date().getFullYear();
 
         doc.setFontSize(18);
         doc.setTextColor(0, 51, 102); // sri-blue
         doc.text("Reporte Anual Consolidado de IVA", 14, 20);
         
-        doc.setFontSize(12);
-        doc.setTextColor(100);
-        doc.text(`Período Fiscal: ${year}`, 14, 28);
+        doc.setFontSize(11);
+        doc.setTextColor(50);
         
-        let finalY = 35;
+        let headerY = 28;
+        if (ruc) {
+            doc.text(`RUC: ${ruc}`, 14, headerY);
+            headerY += 6;
+        }
+        if (razonSocial) {
+            doc.text(`Razón Social: ${razonSocial}`, 14, headerY);
+            headerY += 6;
+        }
+        
+        doc.setTextColor(100);
+        doc.text(`Período Fiscal: ${year}`, 14, headerY);
+        
+        let finalY = headerY + 10;
 
         const sectionsToExport: { range: '400' | '500', title: string }[] = [
             { range: '400', title: 'RESUMEN DE VENTAS (CASILLEROS 400)' },
@@ -214,6 +252,13 @@ const AnnualReport: React.FC = () => {
                     ...SHORT_MONTHS, 
                     'TOTAL'
                 ];
+                
+                // Check if we need a new page before starting the table
+                const pageHeight = doc.internal.pageSize.height;
+                if (finalY + 30 > pageHeight) { // 30 is rough estimate for header
+                    doc.addPage();
+                    finalY = 20;
+                }
 
                 doc.autoTable({
                     startY: finalY,
@@ -232,7 +277,7 @@ const AnnualReport: React.FC = () => {
                         ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 2, { halign: 'right', cellWidth: 15 }])),
                         14: { halign: 'right', fontStyle: 'bold', cellWidth: 18 } // Total
                     },
-                    didDrawPage: (data) => {
+                    didDrawPage: (data: any) => {
                         finalY = data.cursor?.y ?? finalY;
                     }
                 });
@@ -245,12 +290,26 @@ const AnnualReport: React.FC = () => {
 
     const exportToExcel = (mode: 'full' | 'net') => {
         setIsExportMenuOpen(false);
+        const XLSX = getXLSX();
+        if (!XLSX) {
+            setError("La librería XLSX no está cargada.");
+            return;
+        }
+
         const year = monthlyData.length > 0 ? monthlyData[0].year : new Date().getFullYear();
         const sheetTitle = mode === 'full' ? `REPORTE ANUAL CONSOLIDADO IVA ${year}` : `REPORTE ANUAL (NETO) IVA ${year}`;
         const fileName = mode === 'full' ? `Reporte_Anual_IVA_${year}.xlsx` : `Reporte_Anual_IVA_Neto_${year}.xlsx`;
 
         // 1. Build Data Matrix
-        let sheetData: (string | number)[][] = [];
+        let sheetData: (string | number)[][] = [
+            [sheetTitle],
+        ];
+
+        if (ruc) sheetData.push([`RUC: ${ruc}`]);
+        if (razonSocial) sheetData.push([`RAZÓN SOCIAL: ${razonSocial}`]);
+        
+        // Add empty row separator
+        sheetData.push([]);
 
         if (mode === 'full') {
             const headerRow1 = ["Descripción", "Cas. Bruto", "Cas. Neto"];
@@ -268,20 +327,12 @@ const AnnualReport: React.FC = () => {
             headerRow2.push("Bruto");
             headerRow2.push("Neto");
 
-            sheetData = [
-                [sheetTitle],
-                [], 
-                headerRow1,
-                headerRow2
-            ];
+            sheetData.push(headerRow1);
+            sheetData.push(headerRow2);
         } else {
             // Net Only Header
             const headerRow = ["Descripción", "Casillero", ...MONTHS_ORDER, "TOTAL ANUAL"];
-            sheetData = [
-                [sheetTitle],
-                [], 
-                headerRow
-            ];
+            sheetData.push(headerRow);
         }
 
         const sectionsToExport: { range: '400' | '500', title: string }[] = [
@@ -347,6 +398,9 @@ const AnnualReport: React.FC = () => {
                 fill: { fgColor: { rgb: "003366" } }, // SRI Blue
                 alignment: { horizontal: "center", vertical: "center" }
             },
+            metaInfo: {
+                font: { bold: true, sz: 11, name: "Arial" },
+            },
             headerMonth: {
                 font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial" },
                 fill: { fgColor: { rgb: "00A6FB" } }, // Light Blue
@@ -389,12 +443,18 @@ const AnnualReport: React.FC = () => {
         const totalCols = mode === 'full' ? 28 : 15; // 3 header cols + 24 month cols + 2 totals | vs | 2 header cols + 12 month cols + 1 total
         ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } });
         ws['A1'].s = styles.title;
+        
+        // Calculate dynamic start row for headers based on extra info
+        let headerRowStart = 1; // Default if no meta
+        if (ruc) headerRowStart++;
+        if (razonSocial) headerRowStart++;
+        headerRowStart++; // Skip empty row
 
         if (mode === 'full') {
              // Merge Month Headers
             for (let i = 0; i < 13; i++) { 
                  const colStart = 3 + (i * 2);
-                 ws['!merges'].push({ s: { r: 2, c: colStart }, e: { r: 2, c: colStart + 1 } });
+                 ws['!merges'].push({ s: { r: headerRowStart, c: colStart }, e: { r: headerRowStart, c: colStart + 1 } });
             }
         }
 
@@ -424,17 +484,21 @@ const AnnualReport: React.FC = () => {
                 if (R === 0) {
                     ws[cellRef].s = styles.title;
                 }
+                // Meta Info Rows (RUC/Name)
+                else if (R < headerRowStart - 1) { // -1 because of empty row
+                     ws[cellRef].s = styles.metaInfo;
+                }
                 
                 if (mode === 'full') {
                     // Header Logic for Full Mode
-                    if (R === 2) {
+                    if (R === headerRowStart) {
                         if (C < 3) ws[cellRef].s = styles.headerMonth;
                         else if (C >= 3) ws[cellRef].s = styles.headerMonth;
                     }
-                    else if (R === 3) {
+                    else if (R === headerRowStart + 1) {
                         ws[cellRef].s = styles.headerSub;
                     }
-                    else if (R > 3) {
+                    else if (R > headerRowStart + 1) {
                          const cellValue = ws[cellRef].v;
                         if (C === 0 && typeof cellValue === 'string' && (cellValue.includes("RESUMEN DE"))) {
                             ws[cellRef].s = styles.sectionTitle;
@@ -447,10 +511,10 @@ const AnnualReport: React.FC = () => {
                     }
                 } else {
                      // Header Logic for Net Mode
-                    if (R === 2) {
+                    if (R === headerRowStart) {
                          ws[cellRef].s = styles.headerMonth;
                     }
-                    else if (R > 2) {
+                    else if (R > headerRowStart) {
                          const cellValue = ws[cellRef].v;
                         if (C === 0 && typeof cellValue === 'string' && (cellValue.includes("RESUMEN DE"))) {
                             ws[cellRef].s = styles.sectionTitle;
@@ -483,6 +547,16 @@ const AnnualReport: React.FC = () => {
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <h2 className="text-lg font-bold text-sri-blue dark:text-sri-gold">Reporte de Formulario IVA</h2>
                 <div className="flex items-center gap-2">
+                    {monthlyData.length > 0 && (
+                        <button
+                            onClick={handleClearData}
+                            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
+                            title="Limpiar datos"
+                        >
+                            <TrashIcon className="w-5 h-5" />
+                            <span className="hidden sm:inline ml-2">Limpiar</span>
+                        </button>
+                    )}
                     <div className="relative">
                         <label 
                             htmlFor="pdf-report-upload"
@@ -546,6 +620,31 @@ const AnnualReport: React.FC = () => {
                             )}
                         </div>
                     )}
+                </div>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 border-b border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor="report-ruc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">RUC</label>
+                    <input 
+                        type="text" 
+                        id="report-ruc" 
+                        value={ruc} 
+                        onChange={(e) => setRuc(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-sri-blue focus:ring-sri-blue sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2 border"
+                        placeholder="Ingrese RUC"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="report-razonSocial" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Razón Social</label>
+                    <input 
+                        type="text" 
+                        id="report-razonSocial" 
+                        value={razonSocial} 
+                        onChange={(e) => setRazonSocial(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-sri-blue focus:ring-sri-blue sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2 border"
+                        placeholder="Ingrese Razón Social"
+                    />
                 </div>
             </div>
 
