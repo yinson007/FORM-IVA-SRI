@@ -21,22 +21,44 @@ interface MonthlyData {
 const MONTHS_ORDER = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 const SHORT_MONTHS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
-const getSimplifiedStructure = (range: '400' | '500') => {
+const getSimplifiedStructure = (range: '400' | '500' | '700') => {
     const section = formStructure.find(s => s.range === range);
     if (!section) return { title: '', rows: [], header: [] };
 
-    const header = [
-        { id: 'valorBruto', description: 'VALOR BRUTO' },
-        { id: 'valorNeto', description: 'VALOR NETO' },
-    ];
+    let header: { id: string, description: string }[] = [];
+    let mapFields: (fields: (FormField | null)[]) => (FormField | null)[] = () => [];
+
+    if (range === '700') {
+        // Section 700 uses the 3rd column (index 2) for values based on formStructure.ts
+        header = [
+            { id: 'valor', description: 'VALOR' }
+        ];
+        mapFields = (fields) => [fields[2]]; // Map only the 3rd field
+    } else {
+        // Sections 400 and 500 use Bruto (0) and Neto (1)
+        header = [
+            { id: 'valorBruto', description: 'VALOR BRUTO' },
+            { id: 'valorNeto', description: 'VALOR NETO' },
+        ];
+        mapFields = (fields) => [fields[0], fields[1]];
+    }
 
     const simplifiedRows = section.rows
         .filter(row => !row.isAccordion && !row.isHeader && !row.isTitle)
+        // For range 700, filter out rows that don't have the 3rd field or represent non-retention data if needed.
+        // Based on request, we want "AGENTE DE RETENCIÓN". In formStructure, these rows have data in index 2.
+        .filter(row => {
+            if (range === '700') {
+                // Ensure we only pick rows relevant to Agente Retencion (usually index 2 is populated)
+                return row.fields[2] !== null || row.isTotal;
+            }
+            return true;
+        })
         .map(row => ({
             description: row.description,
             note: row.note,
             isTotal: row.isTotal,
-            fields: [row.fields[0], row.fields[1]] as (FormField | null)[]
+            fields: mapFields(row.fields)
         }));
 
     return { title: section.title, rows: simplifiedRows, header };
@@ -45,7 +67,7 @@ const getSimplifiedStructure = (range: '400' | '500') => {
 
 const AnnualReport: React.FC = () => {
     const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
-    const [activeReportTab, setActiveReportTab] = useState<'400' | '500'>('400');
+    const [activeReportTab, setActiveReportTab] = useState<'400' | '500' | '700'>('400');
     const [activeMonthTab, setActiveMonthTab] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
@@ -106,8 +128,6 @@ const AnnualReport: React.FC = () => {
 
         setIsProcessing(true);
         setError(null);
-        // We generally want to append or replace? For simplicity, replacing or merging could be complex.
-        // Assuming user wants to reload everything usually. But let's keep it simple: reset first.
         setMonthlyData([]); 
 
         const processFile = async (file: File): Promise<MonthlyData | null> => {
@@ -141,7 +161,6 @@ const AnnualReport: React.FC = () => {
                  throw new Error("No se pudo extraer datos válidos de ninguno de los archivos. Verifique que sean declaraciones de IVA.");
             }
 
-            // Autofill RUC and Razon Social if found and currently empty
             const foundRuc = validData.find(d => d.identificacion)?.identificacion;
             const foundName = validData.find(d => d.razonSocial)?.razonSocial;
             
@@ -150,7 +169,7 @@ const AnnualReport: React.FC = () => {
 
             validData.sort((a, b) => MONTHS_ORDER.indexOf(a.month) - MONTHS_ORDER.indexOf(b.month));
             setMonthlyData(validData);
-            setActiveMonthTab('TOTAL'); // Default view to total
+            setActiveMonthTab('TOTAL'); 
         } catch (err) {
             if (err instanceof Error) {
                 setError(err.message);
@@ -165,6 +184,10 @@ const AnnualReport: React.FC = () => {
         }
     };
     
+    const formatNumber = (num: number) => {
+        return num.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
     const handleExportPdf = (mode: 'full' | 'net') => {
         setIsExportMenuOpen(false);
         const jspdf = getJsPDF();
@@ -173,14 +196,13 @@ const AnnualReport: React.FC = () => {
             return;
         }
         const { jsPDF } = jspdf;
-        // Use Landscape orientation ('l')
         const doc = new jsPDF({ orientation: 'landscape' });
         const year = monthlyData.length > 0 ? monthlyData[0].year : new Date().getFullYear();
-        const titleSuffix = mode === 'net' ? '(Solo Netos)' : '';
-        const fileName = mode === 'net' ? `reporte_anual_iva_${year}_neto.pdf` : `reporte_anual_iva_${year}_consolidado.pdf`;
+        const titleSuffix = mode === 'net' ? '(Resumido)' : '';
+        const fileName = mode === 'net' ? `reporte_anual_iva_${year}_resumido.pdf` : `reporte_anual_iva_${year}_consolidado.pdf`;
 
         doc.setFontSize(18);
-        doc.setTextColor(0, 51, 102); // sri-blue
+        doc.setTextColor(0, 51, 102); 
         doc.text(`Reporte Anual Consolidado de IVA ${titleSuffix}`, 14, 20);
         
         doc.setFontSize(11);
@@ -201,9 +223,10 @@ const AnnualReport: React.FC = () => {
         
         let finalY = headerY + 10;
 
-        const sectionsToExport: { range: '400' | '500', title: string }[] = [
+        const sectionsToExport: { range: '400' | '500' | '700', title: string }[] = [
             { range: '400', title: 'RESUMEN DE VENTAS (CASILLEROS 400)' },
             { range: '500', title: 'RESUMEN DE COMPRAS Y PAGOS (CASILLEROS 500)' },
+            { range: '700', title: 'AGENTE DE RETENCIÓN (CASILLEROS 700)' },
         ];
 
         sectionsToExport.forEach(sectionInfo => {
@@ -211,44 +234,39 @@ const AnnualReport: React.FC = () => {
             const tableBody: (string | number)[][] = [];
 
             structure.rows.forEach(row => {
-                let fieldTypes;
+                // Determine fields to export based on range and mode
+                let fieldConfigs;
                 
-                if (mode === 'full') {
-                     // We will create a row for Bruto and a row for Neto if they exist
-                     fieldTypes = [
-                        { field: row.fields[0], suffix: '' }, // Bruto usually primary
-                        { field: row.fields[1], suffix: ' (Neto)' } // Neto usually secondary
-                    ];
+                if (sectionInfo.range === '700') {
+                    // For 700, there is only one value field
+                    fieldConfigs = [{ field: row.fields[0], suffix: '' }];
                 } else {
-                     // Net Only: Only take the second field
-                     fieldTypes = [
-                         { field: row.fields[1], suffix: '' }
-                     ];
+                    if (mode === 'full') {
+                        fieldConfigs = [
+                            { field: row.fields[0], suffix: ' (Bruto)' },
+                            { field: row.fields[1], suffix: ' (Neto)' }
+                        ];
+                    } else {
+                         // Net Only / Resumido: Only take the secondary field (Neto)
+                         fieldConfigs = [{ field: row.fields[1], suffix: '' }];
+                    }
                 }
 
-                fieldTypes.forEach(({ field, suffix }) => {
+                fieldConfigs.forEach(({ field, suffix }) => {
                     if (field) {
                         const totalVal = totalData[field.id] || 0;
-                        // Only add row if there is a total value > 0 to save space
                         if (totalVal > 0) {
                             const rowData: (string | number)[] = [];
-                            
-                            // 1. Description
                             rowData.push(`${row.description}${suffix}`);
-                            
-                            // 2. Casillero ID
                             rowData.push(field.id);
                             
-                            // 3. Values for each month
                             MONTHS_ORDER.forEach(monthName => {
                                 const monthRecord = monthlyData.find(m => m.month === monthName);
                                 const val = monthRecord ? (monthRecord.data[field.id] || 0) : 0;
-                                rowData.push(val === 0 ? '-' : val.toFixed(2));
+                                rowData.push(val === 0 ? '-' : formatNumber(val));
                             });
 
-                            // 4. Total
-                            rowData.push(totalVal.toFixed(2));
-                            
+                            rowData.push(formatNumber(totalVal));
                             tableBody.push(rowData);
                         }
                     }
@@ -256,37 +274,29 @@ const AnnualReport: React.FC = () => {
             });
 
             if (tableBody.length > 0) {
-                // Header Row Construction
-                const tableHeaders = [
-                    'Descripción', 
-                    'Cas.', 
-                    ...SHORT_MONTHS, 
-                    'TOTAL'
-                ];
+                const tableHeaders = ['Descripción', 'Cas.', ...SHORT_MONTHS, 'TOTAL'];
                 
-                // Check if we need a new page before starting the table
                 const pageHeight = doc.internal.pageSize.height;
-                if (finalY + 30 > pageHeight) { // 30 is rough estimate for header
+                if (finalY + 30 > pageHeight) {
                     doc.addPage();
                     finalY = 20;
                 }
 
                 doc.autoTable({
                     startY: finalY,
-                    head: [[
-                        { content: sectionInfo.title, colSpan: tableHeaders.length, styles: { fillColor: [0, 51, 102], textColor: 255, fontStyle: 'bold', halign: 'center' } }
+                    head: [
+                        [{ content: sectionInfo.title, colSpan: tableHeaders.length, styles: { fillColor: [0, 51, 102], textColor: 255, fontStyle: 'bold', halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.1 } }],
+                        tableHeaders
                     ],
-                    tableHeaders],
                     body: tableBody,
                     theme: 'grid',
-                    styles: { fontSize: 7, cellPadding: 1 }, // Smaller font for landscape table
-                    headStyles: { fontStyle: 'bold', halign: 'center', fillColor: [22, 160, 233] },
+                    styles: { fontSize: 7, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1 }, 
+                    headStyles: { fontStyle: 'bold', halign: 'center', fillColor: [22, 160, 233], lineColor: [0, 0, 0], lineWidth: 0.1 },
                     columnStyles: { 
-                        0: { cellWidth: 'auto' }, // Description gets remaining space
-                        1: { halign: 'center', fontStyle: 'bold', cellWidth: 10 }, // Casillero ID
-                        // Month columns (indexes 2 to 13)
-                        ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 2, { halign: 'right', cellWidth: 15 }])),
-                        14: { halign: 'right', fontStyle: 'bold', cellWidth: 18 } // Total
+                        0: { cellWidth: 'auto' }, 
+                        1: { halign: 'center', fontStyle: 'bold', cellWidth: 8 }, 
+                        ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 2, { halign: 'right', cellWidth: 17 }])),
+                        14: { halign: 'right', fontStyle: 'bold', cellWidth: 22 } 
                     },
                     didDrawPage: (data: any) => {
                         finalY = data.cursor?.y ?? finalY;
@@ -308,233 +318,112 @@ const AnnualReport: React.FC = () => {
         }
 
         const year = monthlyData.length > 0 ? monthlyData[0].year : new Date().getFullYear();
-        const sheetTitle = mode === 'full' ? `REPORTE ANUAL CONSOLIDADO IVA ${year}` : `REPORTE ANUAL (NETO) IVA ${year}`;
+        const sheetTitle = mode === 'full' ? `REPORTE ANUAL CONSOLIDADO IVA ${year}` : `REPORTE ANUAL (NETO/RESUMIDO) IVA ${year}`;
         const fileName = mode === 'full' ? `Reporte_Anual_IVA_${year}.xlsx` : `Reporte_Anual_IVA_Neto_${year}.xlsx`;
 
-        // 1. Build Data Matrix
-        let sheetData: (string | number)[][] = [
-            [sheetTitle],
-        ];
+        let sheetData: (string | number)[][] = [[sheetTitle]];
 
         if (ruc) sheetData.push([`RUC: ${ruc}`]);
         if (razonSocial) sheetData.push([`RAZÓN SOCIAL: ${razonSocial}`]);
-        
-        // Add empty row separator
         sheetData.push([]);
 
-        if (mode === 'full') {
-            const headerRow1 = ["Descripción", "Cas. Bruto", "Cas. Neto"];
-            const headerRow2 = ["", "", ""];
+        // Dynamic header generation based on mode is complex because columns shift.
+        // Simplified approach: Always use "Description, Cas, Month1...Month12, Total" rows in Excel
+        // but vary how many rows per item we generate.
 
-            MONTHS_ORDER.forEach(month => {
-                headerRow1.push(month);
-                headerRow1.push(""); 
-                headerRow2.push("Bruto");
-                headerRow2.push("Neto");
-            });
+        const headerRow = ["Descripción", "Casillero", ...MONTHS_ORDER, "TOTAL ANUAL"];
+        sheetData.push(headerRow);
 
-            headerRow1.push("TOTAL ANUAL");
-            headerRow1.push("");
-            headerRow2.push("Bruto");
-            headerRow2.push("Neto");
-
-            sheetData.push(headerRow1);
-            sheetData.push(headerRow2);
-        } else {
-            // Net Only Header
-            const headerRow = ["Descripción", "Casillero", ...MONTHS_ORDER, "TOTAL ANUAL"];
-            sheetData.push(headerRow);
-        }
-
-        const sectionsToExport: { range: '400' | '500', title: string }[] = [
+        const sectionsToExport: { range: '400' | '500' | '700', title: string }[] = [
             { range: '400', title: 'RESUMEN DE VENTAS (CASILLEROS 400)' },
             { range: '500', title: 'RESUMEN DE COMPRAS Y PAGOS (CASILLEROS 500)' },
+            { range: '700', title: 'AGENTE DE RETENCIÓN (CASILLEROS 700)' },
         ];
 
         sectionsToExport.forEach(section => {
-            sheetData.push([section.title]); // Section Title
+            sheetData.push([section.title]); 
             
             const structure = getSimplifiedStructure(section.range);
             
             structure.rows.forEach(row => {
-                const fieldBruto = row.fields[0];
-                const fieldNeto = row.fields[1];
-
-                const totalBruto = fieldBruto ? (totalData[fieldBruto.id] || 0) : 0;
-                const totalNeto = fieldNeto ? (totalData[fieldNeto.id] || 0) : 0;
-
-                if (mode === 'full') {
-                    if (totalBruto > 0 || totalNeto > 0) {
-                        const rowData: (string | number)[] = [
-                            row.description,
-                            fieldBruto ? Number(fieldBruto.id) : "", 
-                            fieldNeto ? Number(fieldNeto.id) : ""
-                        ];
-                        MONTHS_ORDER.forEach(month => {
-                            const monthData = monthlyData.find(m => m.month === month)?.data || {};
-                            rowData.push(fieldBruto ? (monthData[fieldBruto.id] || 0) : 0);
-                            rowData.push(fieldNeto ? (monthData[fieldNeto.id] || 0) : 0);
-                        });
-                        rowData.push(totalBruto);
-                        rowData.push(totalNeto);
-                        sheetData.push(rowData);
-                    }
+                let fieldsToProcess;
+                if (section.range === '700') {
+                    fieldsToProcess = [{ field: row.fields[0], suffix: '' }];
                 } else {
-                    // Net Only Logic
-                    if (totalNeto > 0) {
-                         const rowData: (string | number)[] = [
-                            row.description,
-                            fieldNeto ? Number(fieldNeto.id) : ""
+                     if (mode === 'full') {
+                        fieldsToProcess = [
+                            { field: row.fields[0], suffix: ' (Bruto)' },
+                            { field: row.fields[1], suffix: ' (Neto)' }
                         ];
-                        MONTHS_ORDER.forEach(month => {
-                            const monthData = monthlyData.find(m => m.month === month)?.data || {};
-                            rowData.push(fieldNeto ? (monthData[fieldNeto.id] || 0) : 0);
-                        });
-                        rowData.push(totalNeto);
-                        sheetData.push(rowData);
+                    } else {
+                        fieldsToProcess = [{ field: row.fields[1], suffix: '' }];
                     }
                 }
+
+                fieldsToProcess.forEach(({field, suffix}) => {
+                    if (field) {
+                        const totalVal = totalData[field.id] || 0;
+                        if (totalVal > 0) {
+                            const rowData: (string | number)[] = [
+                                `${row.description}${suffix}`,
+                                Number(field.id)
+                            ];
+                            MONTHS_ORDER.forEach(month => {
+                                const monthData = monthlyData.find(m => m.month === month)?.data || {};
+                                rowData.push(monthData[field.id] || 0);
+                            });
+                            rowData.push(totalVal);
+                            sheetData.push(rowData);
+                        }
+                    }
+                });
             });
             sheetData.push([]); 
         });
 
-        // 2. Create Workbook and Sheet
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-        // 3. Styles Definitions
         const styles = {
-            title: {
-                font: { bold: true, sz: 16, color: { rgb: "FFFFFF" }, name: "Arial" },
-                fill: { fgColor: { rgb: "003366" } }, // SRI Blue
-                alignment: { horizontal: "center", vertical: "center" }
-            },
-            metaInfo: {
-                font: { bold: true, sz: 11, name: "Arial" },
-            },
-            headerMonth: {
-                font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial" },
-                fill: { fgColor: { rgb: "00A6FB" } }, // Light Blue
-                alignment: { horizontal: "center" },
-                border: { bottom: { style: "thin" }, right: { style: "thin" } }
-            },
-            headerSub: {
-                font: { bold: true, sz: 9, name: "Arial" },
-                fill: { fgColor: { rgb: "E5E7EB" } }, // Gray 200
-                alignment: { horizontal: "center" },
-                border: { bottom: { style: "thin" }, right: { style: "thin" } }
-            },
-            sectionTitle: {
-                font: { bold: true, color: { rgb: "003366" }, name: "Arial" },
-                fill: { fgColor: { rgb: "FFD700" } }, // SRI Gold
-                border: { bottom: { style: "medium" } }
-            },
-            cellText: {
-                font: { name: "Arial", sz: 10 },
-                alignment: { wrapText: true, vertical: "center" },
-                border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } }
-            },
-            cellCode: {
-                font: { name: "Courier New", sz: 10, bold: true, color: { rgb: "555555" } },
-                alignment: { horizontal: "center", vertical: "center" },
-                border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } }
-            },
-            cellNumber: {
-                font: { name: "Arial", sz: 10 },
-                alignment: { horizontal: "right", vertical: "center" },
-                numFmt: "#,##0.00",
-                border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } }
-            }
+            title: { font: { bold: true, sz: 16, color: { rgb: "FFFFFF" }, name: "Arial" }, fill: { fgColor: { rgb: "003366" } }, alignment: { horizontal: "center", vertical: "center" } },
+            metaInfo: { font: { bold: true, sz: 11, name: "Arial" } },
+            header: { font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial" }, fill: { fgColor: { rgb: "00A6FB" } }, alignment: { horizontal: "center" }, border: { bottom: { style: "thin" }, right: { style: "thin" } } },
+            sectionTitle: { font: { bold: true, color: { rgb: "003366" }, name: "Arial" }, fill: { fgColor: { rgb: "FFD700" } }, border: { bottom: { style: "medium" } } },
+            cellText: { font: { name: "Arial", sz: 10 }, alignment: { wrapText: true, vertical: "center" }, border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } },
+            cellCode: { font: { name: "Courier New", sz: 10, bold: true, color: { rgb: "555555" } }, alignment: { horizontal: "center", vertical: "center" }, border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } },
+            cellNumber: { font: { name: "Arial", sz: 10 }, alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00", border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } }
         };
 
-        // 4. Apply Styles & Merges
         if (!ws['!merges']) ws['!merges'] = [];
-        
-        // Merge Main Title
-        const totalCols = mode === 'full' ? 28 : 15; // 3 header cols + 24 month cols + 2 totals | vs | 2 header cols + 12 month cols + 1 total
-        ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } });
+        ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 14 } }); // Title Merge
         ws['A1'].s = styles.title;
-        
-        // Calculate dynamic start row for headers based on extra info
-        let headerRowStart = 1; // Default if no meta
+
+        let headerRowStart = 1; 
         if (ruc) headerRowStart++;
         if (razonSocial) headerRowStart++;
-        headerRowStart++; // Skip empty row
+        headerRowStart++; 
 
-        if (mode === 'full') {
-             // Merge Month Headers
-            for (let i = 0; i < 13; i++) { 
-                 const colStart = 3 + (i * 2);
-                 ws['!merges'].push({ s: { r: headerRowStart, c: colStart }, e: { r: headerRowStart, c: colStart + 1 } });
-            }
-        }
-
-        // Apply column widths
-        const colWidths = [
-            { wch: 50 }, // Description
-        ];
-        if (mode === 'full') {
-            colWidths.push({ wch: 8 }); // Code Bruto
-            colWidths.push({ wch: 8 }); // Code Neto
-            for(let i=0; i < 26; i++) colWidths.push({ wch: 12 });
-        } else {
-            colWidths.push({ wch: 8 }); // Code Neto
-            for(let i=0; i < 13; i++) colWidths.push({ wch: 12 });
-        }
+        const colWidths = [{ wch: 50 }, { wch: 10 }];
+        for(let i=0; i < 13; i++) colWidths.push({ wch: 12 });
         ws['!cols'] = colWidths;
 
-        // Iterate through all cells to apply styles
         const range = XLSX.utils.decode_range(ws['!ref']);
-        
         for (let R = range.s.r; R <= range.e.r; ++R) {
             for (let C = range.s.c; C <= range.e.c; ++C) {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (!ws[cellRef]) continue;
 
-                // Title Row
-                if (R === 0) {
-                    ws[cellRef].s = styles.title;
-                }
-                // Meta Info Rows (RUC/Name)
-                else if (R < headerRowStart - 1) { // -1 because of empty row
-                     ws[cellRef].s = styles.metaInfo;
-                }
-                
-                if (mode === 'full') {
-                    // Header Logic for Full Mode
-                    if (R === headerRowStart) {
-                        if (C < 3) ws[cellRef].s = styles.headerMonth;
-                        else if (C >= 3) ws[cellRef].s = styles.headerMonth;
-                    }
-                    else if (R === headerRowStart + 1) {
-                        ws[cellRef].s = styles.headerSub;
-                    }
-                    else if (R > headerRowStart + 1) {
-                         const cellValue = ws[cellRef].v;
-                        if (C === 0 && typeof cellValue === 'string' && (cellValue.includes("RESUMEN DE"))) {
-                            ws[cellRef].s = styles.sectionTitle;
-                        } 
-                        else {
-                            if (C === 0) ws[cellRef].s = styles.cellText;
-                            else if (C === 1 || C === 2) ws[cellRef].s = styles.cellCode;
-                            else ws[cellRef].s = styles.cellNumber;
-                        }
-                    }
-                } else {
-                     // Header Logic for Net Mode
-                    if (R === headerRowStart) {
-                         ws[cellRef].s = styles.headerMonth;
-                    }
-                    else if (R > headerRowStart) {
-                         const cellValue = ws[cellRef].v;
-                        if (C === 0 && typeof cellValue === 'string' && (cellValue.includes("RESUMEN DE"))) {
-                            ws[cellRef].s = styles.sectionTitle;
-                        } 
-                        else {
-                            if (C === 0) ws[cellRef].s = styles.cellText;
-                            else if (C === 1) ws[cellRef].s = styles.cellCode;
-                            else ws[cellRef].s = styles.cellNumber;
-                        }
+                if (R === 0) ws[cellRef].s = styles.title;
+                else if (R < headerRowStart - 1) ws[cellRef].s = styles.metaInfo;
+                else if (R === headerRowStart) ws[cellRef].s = styles.header;
+                else if (R > headerRowStart) {
+                     const cellValue = ws[cellRef].v;
+                    if (C === 0 && typeof cellValue === 'string' && (cellValue.includes("RESUMEN DE") || cellValue.includes("AGENTE DE"))) {
+                        ws[cellRef].s = styles.sectionTitle;
+                    } else {
+                        if (C === 0) ws[cellRef].s = styles.cellText;
+                        else if (C === 1) ws[cellRef].s = styles.cellCode;
+                        else ws[cellRef].s = styles.cellNumber;
                     }
                 }
             }
@@ -616,7 +505,7 @@ const AnnualReport: React.FC = () => {
                                             role="menuitem"
                                         >
                                             <FileTextIcon className="w-4 h-4 mr-3 text-blue-500" />
-                                            Exportar a PDF (Solo Netos)
+                                            Exportar a PDF (Resumido)
                                         </button>
                                         <button
                                             onClick={() => exportToExcel('full')}
@@ -632,7 +521,7 @@ const AnnualReport: React.FC = () => {
                                             role="menuitem"
                                         >
                                             <FileSpreadsheetIcon className="w-4 h-4 mr-3 text-blue-600" />
-                                            Exportar a Excel (Solo Netos)
+                                            Exportar a Excel (Resumido)
                                         </button>
                                     </div>
                                 </div>
@@ -700,6 +589,7 @@ const AnnualReport: React.FC = () => {
                        <nav className="flex space-x-4 px-4" aria-label="Report Sections">
                             <button onClick={() => setActiveReportTab('400')} className={`${activeReportTab === '400' ? 'border-sri-blue-light text-sri-blue-light dark:border-sri-gold dark:text-sri-gold' : 'border-transparent text-gray-500 hover:text-gray-700'} py-3 px-1 border-b-2 font-medium text-sm`}>VENTAS 400</button>
                             <button onClick={() => setActiveReportTab('500')} className={`${activeReportTab === '500' ? 'border-sri-blue-light text-sri-blue-light dark:border-sri-gold dark:text-sri-gold' : 'border-transparent text-gray-500 hover:text-gray-700'} py-3 px-1 border-b-2 font-medium text-sm`}>COMPRAS Y PAGOS 500</button>
+                            <button onClick={() => setActiveReportTab('700')} className={`${activeReportTab === '700' ? 'border-sri-blue-light text-sri-blue-light dark:border-sri-gold dark:text-sri-gold' : 'border-transparent text-gray-500 hover:text-gray-700'} py-3 px-1 border-b-2 font-medium text-sm`}>AGENTE RET. IVA</button>
                         </nav>
                     </div>
                     
@@ -709,16 +599,15 @@ const AnnualReport: React.FC = () => {
                                 <thead className="bg-gray-50 dark:bg-gray-700">
                                     <tr>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-3/5">Descripción</th>
-                                        {structure.header.map(h => <th key={h.id} scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/5">{h.description}</th>)}
+                                        {structure.header.map(h => <th key={h.id} scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{h.description}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     {structure.rows.map((row, index) => {
-                                        const fieldBruto = row.fields[0];
-                                        const fieldNeto = row.fields[1];
-                                        const valueBruto = fieldBruto ? (dataToDisplay[fieldBruto.id] || 0) : 0;
-                                        const valueNeto = fieldNeto ? (dataToDisplay[fieldNeto.id] || 0) : 0;
-                                        if (valueBruto === 0 && valueNeto === 0) return null;
+                                        // Dynamic row rendering based on number of fields (1 for Retentions, 2 for others)
+                                        const values = row.fields.map(field => field ? (dataToDisplay[field.id] || 0) : 0);
+                                        const allZero = values.every(v => v === 0);
+                                        if (allZero) return null;
                                         
                                         return (
                                             <tr key={index} className={`transition-colors duration-150 ${row.isTotal ? "bg-sri-gold/20 dark:bg-sri-gold/10" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"}`}>
@@ -726,22 +615,16 @@ const AnnualReport: React.FC = () => {
                                                     <p className={row.isTotal ? 'font-bold' : ''}>{row.description}</p>
                                                     {row.note && <p className="text-xs text-gray-400 italic mt-1">{row.note}</p>}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-mono text-gray-800 dark:text-gray-200">
-                                                    {fieldBruto && (
-                                                        <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sri-blue-light/10 text-sri-blue dark:bg-sri-blue-light/20 dark:text-sri-blue-light border border-sri-blue-light/20">
-                                                            {fieldBruto.id}
-                                                        </span>
-                                                    )}
-                                                    {valueBruto.toFixed(2)}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-mono text-gray-800 dark:text-gray-200">
-                                                    {fieldNeto && (
-                                                        <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sri-blue-light/10 text-sri-blue dark:bg-sri-blue-light/20 dark:text-sri-blue-light border border-sri-blue-light/20">
-                                                            {fieldNeto.id}
-                                                        </span>
-                                                    )}
-                                                    {valueNeto.toFixed(2)}
-                                                </td>
+                                                {row.fields.map((field, i) => (
+                                                    <td key={i} className="px-6 py-4 whitespace-nowrap text-right text-sm font-mono text-gray-800 dark:text-gray-200">
+                                                        {field && (
+                                                            <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sri-blue-light/10 text-sri-blue dark:bg-sri-blue-light/20 dark:text-sri-blue-light border border-sri-blue-light/20">
+                                                                {field.id}
+                                                            </span>
+                                                        )}
+                                                        {values[i].toFixed(2)}
+                                                    </td>
+                                                ))}
                                             </tr>
                                         );
                                     })}

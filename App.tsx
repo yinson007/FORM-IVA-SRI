@@ -2,12 +2,14 @@
 import React, { useState } from 'react';
 import TaxForm from './components/TaxForm';
 import AnnualReport from './components/AnnualReport';
-import { ClipboardListIcon, FileTextIcon } from './components/icons';
+import WithholdingForm from './components/WithholdingForm';
+import AtsSummary from './components/AtsSummary';
+import { ClipboardListIcon, FileTextIcon, FileSpreadsheetIcon, FileCodeIcon } from './components/icons';
 
 const App: React.FC = () => {
-    const [activeView, setActiveView] = useState<'declaration' | 'report'>('declaration');
+    const [activeView, setActiveView] = useState<'declaration' | 'report' | 'withholding' | 'ats'>('declaration');
 
-    const getTabClassName = (view: 'declaration' | 'report') => {
+    const getTabClassName = (view: 'declaration' | 'report' | 'withholding' | 'ats') => {
         const baseClasses = "group inline-flex items-center justify-center py-3 px-4 border-b-2 font-medium text-base transition-colors duration-200 focus:outline-none";
         if (activeView === view) {
             return `${baseClasses} border-sri-blue-light text-sri-blue-light dark:border-sri-gold dark:text-sri-gold`;
@@ -22,26 +24,40 @@ const App: React.FC = () => {
                     Asistente Fiscal SRI
                 </h1>
                 <p className="mt-2 text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-                    Complete, verifique y genere reportes de su declaración de IVA de manera sencilla.
+                    Complete, verifique y genere reportes de sus declaraciones tributarias.
                 </p>
             </header>
 
             <div className="w-full max-w-6xl mx-auto mb-6">
                 <div className="border-b border-gray-200 dark:border-gray-700">
-                    <nav className="-mb-px flex space-x-6 justify-center" aria-label="Tabs">
+                    <nav className="-mb-px flex space-x-6 justify-center overflow-x-auto" aria-label="Tabs">
                         <button
                             onClick={() => setActiveView('declaration')}
                             className={getTabClassName('declaration')}
                         >
                             <FileTextIcon className="w-5 h-5 mr-2" />
-                            <span>Declaración IVA</span>
+                            <span className="whitespace-nowrap">Declaración IVA</span>
                         </button>
                         <button
                             onClick={() => setActiveView('report')}
                             className={getTabClassName('report')}
                         >
                             <ClipboardListIcon className="w-5 h-5 mr-2" />
-                            <span>Reporte Formulario IVA</span>
+                            <span className="whitespace-nowrap">Reporte Formulario IVA</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveView('withholding')}
+                            className={getTabClassName('withholding')}
+                        >
+                            <FileSpreadsheetIcon className="w-5 h-5 mr-2" />
+                            <span className="whitespace-nowrap">Formulario Retenciones</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveView('ats')}
+                            className={getTabClassName('ats')}
+                        >
+                            <FileCodeIcon className="w-5 h-5 mr-2" />
+                            <span className="whitespace-nowrap">Talon ATS</span>
                         </button>
                     </nav>
                 </div>
@@ -50,6 +66,8 @@ const App: React.FC = () => {
             <div className="w-full flex-grow">
                 {activeView === 'declaration' && <TaxForm />}
                 {activeView === 'report' && <AnnualReport />}
+                {activeView === 'withholding' && <WithholdingForm />}
+                {activeView === 'ats' && <AtsSummary />}
             </div>
 
             <footer className="text-center mt-8 text-sm text-gray-500 dark:text-gray-400">

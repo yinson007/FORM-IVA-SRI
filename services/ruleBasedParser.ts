@@ -1,3 +1,4 @@
+
 export interface ExtractedData {
   data: Record<string, number>;
   periodo: string;
@@ -77,11 +78,10 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
   return new Promise((resolve) => {
     const dataMap: Record<string, number> = {};
 
-    // Expresión regular para encontrar casilleros (3 dígitos) y sus valores.
-    // Busca un número de 3 dígitos, seguido de un valor monetario que puede
-    // contener puntos, comas y ser negativo.
+    // Expresión regular para encontrar casilleros (3 o 4 dígitos) y sus valores.
+    // MODIFICADO: (\d{3,4}) para aceptar casilleros como 3120, 3620, etc.
     const lines = text.split('\n');
-    const casilleroValueRegex = /(\d{3})\s+(-?[\d.,]+)/g;
+    const casilleroValueRegex = /(\d{3,4})\s+(-?[\d.,]+)/g;
 
     for (const line of lines) {
         // Busca pares directos de casillero-valor en una línea

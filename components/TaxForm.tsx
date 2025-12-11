@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { formStructure, FormRow, FormField, FormSection } from '../data/formStructure';
 import { PlusIcon, MinusIcon, UploadIcon, LoaderIcon, AlertTriangleIcon, FileTextIcon } from './icons';
@@ -154,14 +155,15 @@ const TaxForm: React.FC = () => {
                             const valueColumnIndex = valueColumnIndexMap[headerId];
                            
                             if (casilleroColumnIndex !== undefined && valueColumnIndex !== undefined) {
-                                const value = parseFloat(formValues[field.id]).toFixed(2);
+                                const value = parseFloat(formValues[field.id]);
+                                const formattedValue = value.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                 
                                 if (pdfRow[casilleroColumnIndex] === '') {
                                     pdfRow[casilleroColumnIndex] = field.id;
-                                    pdfRow[valueColumnIndex] = value;
+                                    pdfRow[valueColumnIndex] = formattedValue;
                                 } else {
                                     (pdfRow[casilleroColumnIndex] as string) += `\n${field.id}`;
-                                    (pdfRow[valueColumnIndex] as string) += `\n${value}`;
+                                    (pdfRow[valueColumnIndex] as string) += `\n${formattedValue}`;
                                 }
                             }
                         }
@@ -190,7 +192,8 @@ const TaxForm: React.FC = () => {
                         ...tableBody
                     ],
                     theme: 'grid',
-                    headStyles: { fontStyle: 'bold', halign: 'center', fillColor: [0, 51, 102] },
+                    styles: { lineColor: [0, 0, 0], lineWidth: 0.1 },
+                    headStyles: { fontStyle: 'bold', halign: 'center', fillColor: [0, 51, 102], lineColor: [0, 0, 0], lineWidth: 0.1 },
                     columnStyles: { 
                         0: { cellWidth: 'auto' },
                         1: { halign: 'center', cellWidth: 20 },
