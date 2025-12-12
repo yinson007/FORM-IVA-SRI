@@ -1,5 +1,5 @@
 {
-  "name": "Formulario de Declaración SRI",
-  "description": "Una aplicación para llenar manualmente, validar y exportar un formulario de declaración de IVA del SRI Ecuador.",
+  "name": "TAXWO TOOL Asistente Fiscal SRI",
+  "description": "Complete, verifique y genere reportes consolidados de sus declaraciones tributarias y Anexos por mes o Periodo Fiscal. Audita tu situación tributaria, proyecta y planifica el pago de impuestos.",
   "requestFramePermissions": []
 }

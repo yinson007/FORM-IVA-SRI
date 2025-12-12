@@ -19,12 +19,15 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col items-center p-4 sm:p-6 lg:p-8">
-            <header className="text-center w-full mb-4">
-                <h1 className="text-4xl sm:text-5xl font-extrabold text-sri-blue dark:text-white">
-                    Asistente Fiscal SRI
+            <header className="text-center w-full mb-8">
+                <h1 className="text-4xl sm:text-5xl font-extrabold text-sri-blue dark:text-white tracking-tight">
+                    TAXWO TOOL <span className="text-sri-blue-light dark:text-sri-gold">Asistente Fiscal SRI</span>
                 </h1>
-                <p className="mt-2 text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-                    Complete, verifique y genere reportes de sus declaraciones tributarias.
+                <p className="mt-4 text-lg text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
+                    Complete, verifique y genere reportes consolidados de sus declaraciones tributarias y Anexos por mes o Periodo Fiscal. 
+                    <span className="block mt-1 font-medium text-sri-blue dark:text-sri-blue-light">
+                        Audita tu situación tributaria, proyecta y planifica el pago de impuestos.
+                    </span>
                 </p>
             </header>
 
@@ -70,8 +73,8 @@ const App: React.FC = () => {
                 {activeView === 'ats' && <AtsSummary />}
             </div>
 
-            <footer className="text-center mt-8 text-sm text-gray-500 dark:text-gray-400">
-                <p>&copy; {new Date().getFullYear()} Soluciones Fiscales. Creado con React.</p>
+            <footer className="text-center mt-12 pb-6 text-sm text-gray-500 dark:text-gray-400">
+                <p>&copy; {new Date().getFullYear()} TAXWO TOOL. Soluciones Fiscales para Ecuador.</p>
             </footer>
         </div>
     );

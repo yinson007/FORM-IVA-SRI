@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { formStructure, FormRow, FormField, FormSection, casilleroToConcepto } from '../data/formStructure';
 import { PlusIcon, MinusIcon, UploadIcon, LoaderIcon, AlertTriangleIcon, FileTextIcon, FileCodeIcon } from './icons';
 import { parsePdfText } from '../services/pdfParser';
-import { extractDataWithRules } from '../services/ruleBasedParser';
+import { extractDataWithRules, ExtractedData } from '../services/ruleBasedParser';
 
 // Declarations for jsPDF libraries loaded from CDN
 declare const jspdf: any;
@@ -63,8 +63,8 @@ const TaxForm: React.FC = () => {
         setPdfError(null);
 
         try {
-            const text = await parsePdfText(file);
-            const extracted = await extractDataWithRules(text);
+            const text: string = await parsePdfText(file);
+            const extracted: ExtractedData = await extractDataWithRules(text);
 
             if (Object.keys(extracted.data).length === 0 && !extracted.identificacion) {
                  throw new Error("No se pudo extraer información relevante. Verifique que el archivo sea una declaración de IVA válida.");
@@ -78,10 +78,10 @@ const TaxForm: React.FC = () => {
             setIdentificacion(extracted.identificacion || '');
             setRazonSocial(extracted.razonSocial || '');
             setPeriodo(extracted.periodo || '');
-            setTipoDeclaracion(extracted.tipo.toUpperCase() || 'ORIGINAL');
+            setTipoDeclaracion(extracted.tipo ? extracted.tipo.toUpperCase() : 'ORIGINAL');
             setFormValues(stringifiedData);
             
-        } catch (err) {
+        } catch (err: unknown) {
             if (err instanceof Error) {
                 setPdfError(`Error al procesar el PDF: ${err.message}`);
             } else {
