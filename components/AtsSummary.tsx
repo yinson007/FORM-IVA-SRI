@@ -409,7 +409,7 @@ const AtsSummary: React.FC = () => {
             let currentY = 35;
 
             // --- TABLE 1: COMPRAS ---
-            const comprasBody = data.compras.map(c => [
+            const comprasBody: any[][] = data.compras.map(c => [
                 c.cod,
                 c.transaccion,
                 c.count,
@@ -452,7 +452,7 @@ const AtsSummary: React.FC = () => {
             currentY = (doc as any).lastAutoTable.finalY + 10;
 
             // --- TABLE 2: RETENCIONES RENTA ---
-            const rentaBody = data.retencionesRenta.map(r => [
+            const rentaBody: any[][] = data.retencionesRenta.map(r => [
                 r.cod,
                 r.concepto,
                 r.count,
@@ -494,7 +494,7 @@ const AtsSummary: React.FC = () => {
             currentY = (doc as any).lastAutoTable.finalY + 10;
 
             // --- TABLE 3: RETENCIONES IVA ---
-            const ivaBody = data.retencionesIva.map(i => [
+            const ivaBody: any[][] = data.retencionesIva.map(i => [
                 i.operacion,
                 i.concepto,
                 formatMoney(i.valRet)

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { formStructure, FormRow, FormField, FormSection } from '../data/formStructure';
-import { PlusIcon, MinusIcon, UploadIcon, LoaderIcon, AlertTriangleIcon, FileTextIcon } from './icons';
+import { formStructure, FormRow, FormField, FormSection, casilleroToConcepto } from '../data/formStructure';
+import { PlusIcon, MinusIcon, UploadIcon, LoaderIcon, AlertTriangleIcon, FileTextIcon, FileCodeIcon } from './icons';
 import { parsePdfText } from '../services/pdfParser';
 import { extractDataWithRules } from '../services/ruleBasedParser';
 
@@ -91,6 +91,41 @@ const TaxForm: React.FC = () => {
             setIsProcessingPdf(false);
             event.target.value = ''; 
         }
+    };
+
+    const handleExportJson = () => {
+        const detallesDeclaracion: Record<string, string> = {};
+
+        // Recorrer los valores del formulario
+        Object.entries(formValues).forEach(([casillero, valor]) => {
+            const numVal = parseFloat(valor);
+            const concepto = casilleroToConcepto[casillero];
+
+            // Solo agregar si existe mapeo a concepto y el valor es mayor a 0 (según reglas del PDF)
+            if (concepto && !isNaN(numVal) && numVal !== 0) {
+                // Regla del PDF: "En caso de decimales, se deben registrar con punto (.)"
+                detallesDeclaracion[concepto] = numVal.toFixed(2);
+            }
+        });
+
+        // Estructura JSON sugerida por la guía (objeto anidado)
+        const jsonOutput = {
+            identificacionInformante: identificacion,
+            razonSocial: razonSocial,
+            periodo: periodo,
+            tipoDeclaracion: tipoDeclaracion,
+            detallesDeclaracion: detallesDeclaracion
+        };
+
+        const blob = new Blob([JSON.stringify(jsonOutput, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `declaracion_iva_${identificacion || 'sin_id'}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     const handleExportPdf = () => {
@@ -355,6 +390,13 @@ const TaxForm: React.FC = () => {
                             disabled={isProcessingPdf}
                         />
                     </div>
+                    <button
+                        onClick={handleExportJson}
+                        className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 bg-green-600 text-white hover:bg-opacity-90"
+                    >
+                        <FileCodeIcon className="w-5 h-5 mr-2" />
+                        Exportar JSON
+                    </button>
                      <button
                         onClick={handleExportPdf}
                         className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sri-blue bg-sri-blue text-white hover:bg-opacity-90"
