@@ -80,43 +80,61 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
 
     // Expresión regular para encontrar casilleros (3 o 4 dígitos) y sus valores.
     // MODIFICADO: (\d{3,4}) para aceptar casilleros como 3120, 3620, etc.
-    const lines = text.split('\n');
-    const casilleroValueRegex = /(\d{3,4})\s+(-?[\d.,]+)/g;
+    // Expresión regular mejorada para encontrar casilleros (3 o 4 dígitos) y sus valores.
+    // Se busca un ID de 3-4 dígitos seguido de un valor numérico.
+    // Se intenta evitar que el ID sea capturado como valor si se repite.
+    // Usamos el texto completo para permitir capturas que podrían estar en líneas separadas por poco espacio.
+    
+    // Regex que busca: [Opcional: Casillero/Campo] [ID de 3-4 dígitos] [Opcional: : o -] [Espacios/Salto de línea] [Valor numérico]
+    const casilleroValueRegex = /(?:Casillero|Campo|ID)?\s*(\d{3,4})\s*[:\-]?\s+(-?[\d.,]+)(?=\s|$)/gi;
+    let match;
+    
+    while ((match = casilleroValueRegex.exec(text)) !== null) {
+        const id = match[1];
+        const valueStr = match[2];
+        
+        // Validar si el ID es uno de los que esperamos (3 o 4 dígitos)
+        if (id.length < 3 || id.length > 4) continue;
 
-    for (const line of lines) {
-        // Busca pares directos de casillero-valor en una línea
-        let match;
-        while ((match = casilleroValueRegex.exec(line)) !== null) {
-            const id = match[1];
-            const valueStr = match[2];
-            const value = cleanAndParseValue(valueStr);
+        const value = cleanAndParseValue(valueStr);
 
-            if (!isNaN(value) && value !== 0) {
-                 // Evita sobrescribir valores ya encontrados, asumiendo que el primero es el correcto
-                if (!dataMap[id]) {
-                    dataMap[id] = value;
-                }
+        // MEJORA: Si el valor es exactamente igual al ID (ej: Casillero 731, Valor 731.00)
+        // es muy probable que sea una repetición del ID en el PDF.
+        if (Math.abs(value - parseFloat(id)) < 0.001) {
+            // Intentamos ver si hay otro número después en el texto cercano
+            const searchRange = text.substring(match.index + match[0].length, match.index + match[0].length + 20).trim();
+            const nextValueMatch = /^(-?[\d.,]+)/.exec(searchRange);
+            if (nextValueMatch) {
+                const nextValue = cleanAndParseValue(nextValueMatch[1]);
+                dataMap[id] = nextValue;
+                continue; 
             }
+            continue;
+        }
+
+        // Guardar el valor si no existe o si el actual es 0 (dando prioridad a valores reales)
+        if (dataMap[id] === undefined || dataMap[id] === 0) {
+            dataMap[id] = value;
         }
     }
     
-    // Regex para encontrar el período fiscal
-    const periodoRegex = /(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\s+(\d{4})|(PRIMER|SEGUNDO)\s+SEMESTRE\s+(\d{4})/i;
+    // Regex para encontrar el período fiscal - Mejorado
+    const periodoRegex = /(?:PER[ÍI]ODO|MES|A[ÑN]O|FISCAL)\s*[:\-]?\s*((?:ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\s+(\d{4})|(?:PRIMER|SEGUNDO)\s+SEMESTRE\s+(\d{4})|(?:\d{2})\/(?:\d{4}))/i;
     const periodoMatch = text.match(periodoRegex);
-    const periodo = periodoMatch ? periodoMatch[0].toUpperCase() : '';
+    const periodo = periodoMatch ? periodoMatch[1].toUpperCase() : '';
 
     // Regex para encontrar el tipo de declaración
-    const tipoRegex = /(ORIGINAL|SUSTITUTIVA)/i;
+    const tipoRegex = /(?:TIPO|DECLARACI[ÓO]N)\s*[:\-]?\s*(ORIGINAL|SUSTITUTIVA)/i;
     const tipoMatch = text.match(tipoRegex);
-    const tipo = tipoMatch ? tipoMatch[0].toUpperCase() : '';
+    const tipo = tipoMatch ? tipoMatch[1].toUpperCase() : '';
 
-    // Regex to find Identification (RUC)
-    const identificacionRegex = /(?:IDENTIFICACIÓN(?: DEL SUJETO PASIVO)?|RUC)\s*(\d{13})/i;
+    // Regex to find Identification (RUC) - Mejorado para ser más flexible
+    const identificacionRegex = /(?:IDENTIFICACI[ÓO]N(?: DEL SUJETO PASIVO)?|RUC|N[ÚU]MERO DE RUC)\s*[:\-]?\s*(\d{13})/i;
     const identificacionMatch = text.match(identificacionRegex);
     const identificacion = identificacionMatch ? identificacionMatch[1] : '';
 
-    // Regex to find Razón Social (Business Name)
-    const razonSocialRegex = /(?:RAZÓN SOCIAL(?: O APELLIDOS Y NOMBRES COMPLETOS)?)\s+([A-ZÑ\sÁÉÍÓÚÜ]+?)(?:\s+\d{3}|$|\n)/i;
+    // Regex to find Razón Social (Business Name) - Mejorado
+    const razonSocialRegex = /(?:RAZ[ÓO]N SOCIAL(?: O APELLIDOS Y NOMBRES COMPLETOS)?|SUJETO PASIVO)\s*[:\-]?\s*([A-ZÑ\sÁÉÍÓÚÜ]+?)(?:\s+\d{3}|\s+RUC|\s+IDENTIFICACI[ÓO]N|$|\n)/i;
     const razonSocialMatch = text.match(razonSocialRegex);
     const razonSocial = razonSocialMatch ? razonSocialMatch[1].trim() : '';
 

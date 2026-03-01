@@ -45,19 +45,41 @@ export async function parsePdfText(file: File): Promise<string> {
     let lines: string[] = [];
     let currentLine: string[] = [];
     let lastY = items.length > 0 ? items[0].transform[5] : 0;
+    let lastX = items.length > 0 ? items[0].transform[4] : 0;
+    let lastWidth = items.length > 0 ? (items[0].width || 0) : 0;
 
-    for (const item of items) {
-      // If the vertical position is significantly different, it's a new line.
-      if (currentLine.length > 0 && Math.abs(item.transform[5] - lastY) > 5) {
-        lines.push(currentLine.join(' '));
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const currentX = item.transform[4];
+      const currentY = item.transform[5];
+      const currentWidth = item.width || 0;
+
+      // Si la posición vertical es significativamente diferente, es una nueva línea.
+      if (currentLine.length > 0 && Math.abs(currentY - lastY) > 5) {
+        lines.push(currentLine.join(' ').replace(/\s+/g, ' '));
         currentLine = [];
+        lastX = 0;
+        lastWidth = 0;
       }
-      currentLine.push(item.str);
-      lastY = item.transform[5];
+
+      // Heurística para unir fragmentos de texto que están muy cerca horizontalmente (sin espacio)
+      // Esto evita que números como "1.23" se separen en "1. 23"
+      const distance = currentX - (lastX + lastWidth);
+      
+      if (currentLine.length > 0 && distance < 3 && distance > -1) {
+        // Unir al último elemento sin espacio
+        currentLine[currentLine.length - 1] += item.str;
+      } else {
+        currentLine.push(item.str);
+      }
+
+      lastY = currentY;
+      lastX = currentX;
+      lastWidth = currentWidth;
     }
-    // Add the last line
+    // Añadir la última línea
     if (currentLine.length > 0) {
-      lines.push(currentLine.join(' '));
+      lines.push(currentLine.join(' ').replace(/\s+/g, ' '));
     }
     
     fullText += lines.join('\n');
