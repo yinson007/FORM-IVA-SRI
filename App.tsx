@@ -7,7 +7,7 @@ import AtsSummary from './components/AtsSummary';
 import { ClipboardListIcon, FileTextIcon, FileSpreadsheetIcon, FileCodeIcon } from './components/icons';
 
 const App: React.FC = () => {
-    const [activeView, setActiveView] = useState<'declaration' | 'report' | 'withholding' | 'ats'>('declaration');
+    const [activeView, setActiveView] = useState<'declaration' | 'report' | 'withholding' | 'ats'>('report');
 
     const getTabClassName = (view: 'declaration' | 'report' | 'withholding' | 'ats') => {
         const baseClasses = "group inline-flex items-center justify-center py-3 px-4 border-b-2 font-medium text-base transition-colors duration-200 focus:outline-none";
