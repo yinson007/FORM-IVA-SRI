@@ -74,7 +74,7 @@ const App: React.FC = () => {
             </div>
 
             <footer className="text-center mt-12 pb-6 text-sm text-gray-500 dark:text-gray-400">
-                <p>&copy; {new Date().getFullYear()} TAXWO TOOL. Soluciones Fiscales para Ecuador.</p>
+                <p>&copy; {new Date().getFullYear()} TAXWO TOOL a Codigo Contable S.A.S. - Soluciones Fiscales para Ecuador. - Desarrollo. Ing, Jimson Eras Cando . Mg Desarrollo</p>
             </footer>
         </div>
     );
