@@ -93,6 +93,8 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
         }
 
         if (idMatches.length === 0) continue;
+        
+        console.log(`DEBUG: Procesando línea: "${line}" con IDs: ${idMatches.map(i => i.id).join(', ')}`);
 
         // 2. Encontrar todos los posibles valores numéricos en esta línea
         // Un valor es algo que parece un número (con o sin decimales)
@@ -138,8 +140,11 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
                     const nextId = idMatches[i + 1];
                     
                     // Buscamos valores que estén DESPUÉS de este ID pero ANTES del siguiente ID
+                    // Y que estén muy cerca del ID (máximo 15 caracteres de distancia)
                     const valuesForThisId = valueMatches.filter(v => 
-                        v.index > currentId.index && (!nextId || v.index < nextId.index)
+                        v.index > currentId.index && 
+                        v.index < currentId.index + currentId.length + 15 && 
+                        (!nextId || v.index < nextId.index)
                     );
                     
                     if (valuesForThisId.length > 0) {
@@ -151,6 +156,8 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
                         if (Math.abs(selectedValue - parseFloat(currentId.id)) < 0.001 && valuesForThisId.length > 1) {
                             selectedValue = valuesForThisId[1].value;
                         }
+
+                        console.log(`DEBUG: Casillero ${currentId.id} emparejado con valor ${selectedValue} (de valores: ${valuesForThisId.map(v => v.value).join(', ')})`);
 
                         const id = currentId.id;
                         if (dataMap[id] === undefined || dataMap[id] === 0) {
