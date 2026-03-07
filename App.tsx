@@ -35,13 +35,6 @@ const App: React.FC = () => {
                 <div className="border-b border-gray-200 dark:border-gray-700">
                     <nav className="-mb-px flex space-x-6 justify-center overflow-x-auto" aria-label="Tabs">
                         <button
-                            onClick={() => setActiveView('declaration')}
-                            className={getTabClassName('declaration')}
-                        >
-                            <FileTextIcon className="w-5 h-5 mr-2" />
-                            <span className="whitespace-nowrap">Declaración IVA</span>
-                        </button>
-                        <button
                             onClick={() => setActiveView('report')}
                             className={getTabClassName('report')}
                         >
@@ -61,6 +54,13 @@ const App: React.FC = () => {
                         >
                             <FileCodeIcon className="w-5 h-5 mr-2" />
                             <span className="whitespace-nowrap">Talon ATS</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveView('declaration')}
+                            className={getTabClassName('declaration')}
+                        >
+                            <FileTextIcon className="w-5 h-5 mr-2" />
+                            <span className="whitespace-nowrap">Declaración IVA</span>
                         </button>
                     </nav>
                 </div>
