@@ -80,43 +80,88 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
 
     // Expresión regular para encontrar casilleros (3 o 4 dígitos) y sus valores.
     // MODIFICADO: (\d{3,4}) para aceptar casilleros como 3120, 3620, etc.
-    // Expresión regular mejorada para encontrar casilleros (3 o 4 dígitos) y sus valores.
-    // Se busca un ID de 3-4 dígitos seguido de un valor numérico.
-    // Se intenta evitar que el ID sea capturado como valor si se repite.
-    // Usamos el texto completo para permitir capturas que podrían estar en líneas separadas por poco espacio.
+    // --- NUEVA LÓGICA DE EXTRACCIÓN ROBUSTA ---
+    const lines = text.split('\n');
     
-    // Regex que busca: [Opcional: Casillero/Campo] [ID de 3-4 dígitos] [Opcional: : o -] [Espacios/Salto de línea] [Valor numérico]
-    const casilleroValueRegex = /(?:Casillero|Campo|ID)?\s*(\d{3,4})\s*[:\-]?\s+(-?[\d.,]+)(?=\s|$)/gi;
-    let match;
-    
-    while ((match = casilleroValueRegex.exec(text)) !== null) {
-        const id = match[1];
-        const valueStr = match[2];
-        
-        // Validar si el ID es uno de los que esperamos (3 o 4 dígitos)
-        if (id.length < 3 || id.length > 4) continue;
-
-        const value = cleanAndParseValue(valueStr);
-
-        // MEJORA: Si el valor es exactamente igual al ID (ej: Casillero 731, Valor 731.00)
-        // es muy probable que sea una repetición del ID en el PDF.
-        if (Math.abs(value - parseFloat(id)) < 0.001) {
-            // Intentamos ver si hay otro número después en el texto cercano
-            const searchRange = text.substring(match.index + match[0].length, match.index + match[0].length + 20).trim();
-            const nextValueMatch = /^(-?[\d.,]+)/.exec(searchRange);
-            if (nextValueMatch) {
-                const nextValue = cleanAndParseValue(nextValueMatch[1]);
-                dataMap[id] = nextValue;
-                continue; 
-            }
-            continue;
+    for (const line of lines) {
+        // 1. Encontrar todos los posibles IDs de casilleros en esta línea (3-4 dígitos)
+        const idMatches: { id: string, index: number, length: number }[] = [];
+        const idRegex = /\b(\d{3,4})\b/g;
+        let m;
+        while ((m = idRegex.exec(line)) !== null) {
+            idMatches.push({ id: m[1], index: m.index, length: m[0].length });
         }
 
-        // Guardar el valor si no existe o si el actual es 0 (dando prioridad a valores reales)
-        if (dataMap[id] === undefined || dataMap[id] === 0) {
-            dataMap[id] = value;
+        if (idMatches.length === 0) continue;
+
+        // 2. Encontrar todos los posibles valores numéricos en esta línea
+        // Un valor es algo que parece un número (con o sin decimales)
+        const valueMatches: { value: number, index: number, length: number, str: string }[] = [];
+        // Regex para números: opcionalmente negativos, con miles/decimales (. o ,)
+        const valueRegex = /-?[\d]+(?:[.,][\d]+)+|-?[\d]+/g;
+        
+        while ((m = valueRegex.exec(line)) !== null) {
+            const valStr = m[0];
+            const valIndex = m.index;
+            
+            // IMPORTANTE: Un número solo es un "valor" si NO es uno de los IDs que ya identificamos
+            // Comparamos índices para estar seguros
+            const isId = idMatches.some(idM => idM.index === valIndex && idM.length === valStr.length);
+            if (isId) continue;
+
+            const value = cleanAndParseValue(valStr);
+            valueMatches.push({ value, index: valIndex, length: valStr.length, str: valStr });
+        }
+
+        // 3. Lógica de Emparejamiento (Pairing)
+        if (valueMatches.length > 0) {
+            // Caso A: Formato Agrupado (ID1 ID2 ID3 ... Valor1 Valor2 Valor3 ...)
+            // Común en tablas de SRI donde los códigos están a la izquierda y valores a la derecha
+            const maxIdIndex = Math.max(...idMatches.map(i => i.index));
+            const minValueIndex = Math.min(...valueMatches.map(v => v.index));
+            
+            if (maxIdIndex < minValueIndex && idMatches.length === valueMatches.length) {
+                for (let i = 0; i < idMatches.length; i++) {
+                    const id = idMatches[i].id;
+                    const val = valueMatches[i].value;
+                    // Solo guardamos si no tenemos un valor mejor (distinto de cero)
+                    if (dataMap[id] === undefined || dataMap[id] === 0) {
+                        dataMap[id] = val;
+                    }
+                }
+            } 
+            // Caso B: Formato Intercalado (ID1 Valor1 ID2 Valor2 ...)
+            // O casos mixtos
+            else {
+                for (let i = 0; i < idMatches.length; i++) {
+                    const currentId = idMatches[i];
+                    const nextId = idMatches[i + 1];
+                    
+                    // Buscamos valores que estén DESPUÉS de este ID pero ANTES del siguiente ID
+                    const valuesForThisId = valueMatches.filter(v => 
+                        v.index > currentId.index && (!nextId || v.index < nextId.index)
+                    );
+                    
+                    if (valuesForThisId.length > 0) {
+                        // Si hay varios valores, tomamos el primero (el más cercano al ID)
+                        // A menos que el primero sea igual al ID (error de duplicación en PDF)
+                        let selectedValue = valuesForThisId[0].value;
+                        
+                        // Si el valor es igual al ID, intentamos tomar el siguiente si existe
+                        if (Math.abs(selectedValue - parseFloat(currentId.id)) < 0.001 && valuesForThisId.length > 1) {
+                            selectedValue = valuesForThisId[1].value;
+                        }
+
+                        const id = currentId.id;
+                        if (dataMap[id] === undefined || dataMap[id] === 0) {
+                            dataMap[id] = selectedValue;
+                        }
+                    }
+                }
+            }
         }
     }
+    // --- FIN DE LÓGICA DE EXTRACCIÓN ---
     
     // Regex para encontrar el período fiscal - Mejorado
     const periodoRegex = /(?:PER[ÍI]ODO|MES|A[ÑN]O|FISCAL)\s*[:\-]?\s*((?:ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\s+(\d{4})|(?:PRIMER|SEGUNDO)\s+SEMESTRE\s+(\d{4})|(?:\d{2})\/(?:\d{4}))/i;
