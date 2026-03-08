@@ -98,7 +98,7 @@ const TaxForm: React.FC = () => {
 
         // Recorrer los valores del formulario
         Object.entries(formValues).forEach(([casillero, valor]) => {
-            const numVal = parseFloat(valor);
+            const numVal = parseFloat(valor as string);
             const concepto = casilleroToConcepto[casillero];
 
             // Solo agregar si existe mapeo a concepto y el valor es mayor a 0 (según reglas del PDF)

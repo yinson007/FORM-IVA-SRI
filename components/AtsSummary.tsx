@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { UploadIcon, LoaderIcon, AlertTriangleIcon, TrashIcon, FileCodeIcon, FileTextIcon, FileSpreadsheetIcon } from './icons';
+import { UploadIcon, LoaderIcon, AlertTriangleIcon, TrashIcon, FileCodeIcon, FileTextIcon, FileSpreadsheetIcon, DownloadIcon, ChevronDownIcon } from './icons';
 import { docTypes, retentionCodes } from '../data/atsMapping';
 
-// Declaración para acceder a la librería global cargada vía CDN
-declare const jspdf: any;
+// Access globals via window
+const getJsPDF = () => (window as any).jspdf;
+const getXLSX = () => (window as any).XLSX;
 
 interface AtsData {
     id: string; // Unique ID usually Month '01', '02' or '06','12' for semesters
@@ -71,6 +72,7 @@ const AtsSummary: React.FC = () => {
     const [isSemestral, setIsSemestral] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
     // --- XML Parsing Logic ---
     const parseSingleXML = (text: string, filename: string): AtsData => {
@@ -390,6 +392,11 @@ const AtsSummary: React.FC = () => {
     // --- PDF EXPORT FUNCTION (BY MONTH) ---
     const handleExportPdf = () => {
         if (atsDataList.length === 0) return;
+        const jspdf = getJsPDF();
+        if (!jspdf) {
+            setError("La librería jsPDF no está cargada.");
+            return;
+        }
         const { jsPDF } = jspdf;
         const doc = new jsPDF({ orientation: 'landscape' });
 
@@ -534,6 +541,11 @@ const AtsSummary: React.FC = () => {
     // --- NEW: ANNUAL MATRIX REPORT FUNCTION ---
     const handleExportAnnualMatrixPdf = () => {
         if (atsDataList.length === 0) return;
+        const jspdf = getJsPDF();
+        if (!jspdf) {
+            setError("La librería jsPDF no está cargada.");
+            return;
+        }
         const { jsPDF } = jspdf;
         const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
         
@@ -816,6 +828,101 @@ const AtsSummary: React.FC = () => {
     };
 
 
+    const handleExportExcel = () => {
+        setIsExportMenuOpen(false);
+        const XLSX = getXLSX();
+        if (!XLSX) {
+            setError("La librería XLSX no está cargada.");
+            return;
+        }
+
+        const data = consolidatedData;
+        if (!data) return;
+
+        const year = data.anio;
+        const fileName = `Talon_ATS_Consolidado_${year}.xlsx`;
+
+        // 1. Prepare Sheet Data
+        const sheetData: any[][] = [
+            [`TALÓN RESUMEN ATS - ${data.periodoLabel}`],
+            [`RUC: ${data.ruc}`],
+            [`RAZÓN SOCIAL: ${data.razonSocial}`],
+            []
+        ];
+
+        // --- SECTION: COMPRAS ---
+        sheetData.push(["COMPRAS"]);
+        sheetData.push(["Cod.", "Transacción", "No. Registros", "BI Tarifa 0%", "BI Tarifa 12%/15%", "BI No Objeto IVA", "Valor IVA"]);
+        
+        data.compras.forEach(c => {
+            sheetData.push([c.cod, c.transaccion, c.count, c.bi0, c.bi12, c.biNoObj, c.montoIva]);
+        });
+        sheetData.push(["TOTAL COMPRAS", "", data.compras.reduce((s,c)=>s+c.count, 0), data.totals.compras.bi0, data.totals.compras.bi12, data.totals.compras.biNoObj, data.totals.compras.montoIva]);
+        sheetData.push([]);
+
+        // --- SECTION: RETENCIONES RENTA ---
+        sheetData.push(["RETENCIÓN EN LA FUENTE DE IMPUESTO A LA RENTA"]);
+        sheetData.push(["Cod.", "Concepto de Retención", "No. Registros", "Base Imponible", "Valor Retenido"]);
+        data.retencionesRenta.forEach(r => {
+            sheetData.push([r.cod, r.concepto, r.count, r.base, r.valRet]);
+        });
+        sheetData.push(["TOTAL RET. RENTA", "", data.retencionesRenta.reduce((s,r)=>s+r.count, 0), data.totals.retRenta.base, data.totals.retRenta.valRet]);
+        sheetData.push([]);
+
+        // --- SECTION: RETENCIONES IVA ---
+        sheetData.push(["RETENCIÓN EN LA FUENTE DE IVA"]);
+        sheetData.push(["Operación", "Concepto de Retención", "Valor Retenido"]);
+        data.retencionesIva.forEach(r => {
+            sheetData.push([r.operacion, r.concepto, r.valRet]);
+        });
+        sheetData.push(["TOTAL RET. IVA", "", data.totals.retIva]);
+        sheetData.push([]);
+        sheetData.push(["TOTAL IMPUESTO A PAGAR (Renta + IVA)", "", data.totals.retRenta.valRet + data.totals.retIva]);
+
+        // 2. Create Workbook and Sheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+        // 3. Styling
+        const styles = {
+            title: { font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "003366" } }, alignment: { horizontal: "center" } },
+            sectionHeader: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "00A6FB" } }, alignment: { horizontal: "center" } },
+            tableHeader: { font: { bold: true, color: { rgb: "333333" } }, fill: { fgColor: { rgb: "E5E7EB" } }, border: { bottom: { style: "thin" } } },
+            totalRow: { font: { bold: true }, fill: { fgColor: { rgb: "FEF3C7" } } },
+            numberCell: { numFmt: "#,##0.00" }
+        };
+
+        // Apply basic styling to rows (this is a simplified version for xlsx-js-style)
+        const range = XLSX.utils.decode_range(ws['!ref']!);
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!ws[cellRef]) continue;
+
+                if (R === 0) ws[cellRef].s = styles.title;
+                if (typeof ws[cellRef].v === 'string' && (ws[cellRef].v === "COMPRAS" || ws[cellRef].v.includes("RETENCIÓN"))) {
+                    ws[cellRef].s = styles.sectionHeader;
+                }
+                if (typeof ws[cellRef].v === 'number' && C >= 3) {
+                    ws[cellRef].s = styles.numberCell;
+                }
+                if (typeof ws[cellRef].v === 'string' && ws[cellRef].v.includes("TOTAL")) {
+                    // Apply total style to the whole row
+                    for (let c = 0; c <= range.e.c; ++c) {
+                        const rCell = XLSX.utils.encode_cell({ r: R, c: c });
+                        if (ws[rCell]) ws[rCell].s = { ...styles.totalRow, ...(c >= 3 ? styles.numberCell : {}) };
+                    }
+                }
+            }
+        }
+
+        // Set column widths
+        ws['!cols'] = [{ wch: 15 }, { wch: 50 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+
+        XLSX.utils.book_append_sheet(wb, ws, "ATS Consolidado");
+        XLSX.writeFile(wb, fileName);
+    };
+
     return (
         <div className="w-full max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden mb-10">
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -837,25 +944,45 @@ const AtsSummary: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {/* Botón Reporte Anual Matriz */}
+                        {/* Botón Exportar con Menú */}
                         {atsDataList.length > 0 && (
-                            <button 
-                                onClick={handleExportAnnualMatrixPdf} 
-                                className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 bg-green-600 text-white hover:bg-opacity-90"
-                                title="Generar reporte anual consolidado (Matriz)"
-                            >
-                                <FileSpreadsheetIcon className="w-5 h-5 mr-2" /> 
-                                <span className="hidden sm:inline">Reporte Anual</span>
-                            </button>
-                        )}
-                         {atsDataList.length > 0 && (
-                            <button 
-                                onClick={handleExportPdf} 
-                                className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sri-blue bg-sri-blue text-white hover:bg-opacity-90"
-                            >
-                                <FileTextIcon className="w-5 h-5 mr-2" /> 
-                                <span className="hidden sm:inline">PDF por Mes</span>
-                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                                    className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sri-blue bg-sri-blue text-white hover:bg-opacity-90"
+                                >
+                                    <DownloadIcon className="w-5 h-5 mr-2" />
+                                    Exportar
+                                    <ChevronDownIcon className="w-4 h-4 ml-2" />
+                                </button>
+                                {isExportMenuOpen && (
+                                    <div className="absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-50">
+                                        <div className="py-1" role="menu">
+                                            <button 
+                                                onClick={() => { setIsExportMenuOpen(false); handleExportAnnualMatrixPdf(); }} 
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center"
+                                            >
+                                                <FileSpreadsheetIcon className="w-4 h-4 mr-3 text-green-600" />
+                                                Reporte Anual (Matriz PDF)
+                                            </button>
+                                            <button 
+                                                onClick={() => { setIsExportMenuOpen(false); handleExportPdf(); }} 
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center"
+                                            >
+                                                <FileTextIcon className="w-4 h-4 mr-3 text-red-500" />
+                                                PDF por Mes (Resumen)
+                                            </button>
+                                            <button 
+                                                onClick={handleExportExcel} 
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center"
+                                            >
+                                                <FileSpreadsheetIcon className="w-4 h-4 mr-3 text-green-700" />
+                                                Exportar a Excel (.xlsx)
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
                         {atsDataList.length > 0 && (
                             <button onClick={handleClear} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600">
@@ -938,41 +1065,41 @@ const AtsSummary: React.FC = () => {
                             </div>
 
                             {/* Table 1: Compras */}
-                            <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 border-b border-gray-300 dark:border-gray-600 text-center font-bold text-gray-700 dark:text-gray-200 uppercase text-sm">
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                                <div className="bg-sri-blue dark:bg-gray-700 px-4 py-3 text-center font-bold text-white uppercase text-sm tracking-wider">
                                     COMPRAS
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                                        <thead className="bg-white dark:bg-gray-800">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
                                             <tr>
-                                                <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600">Cod.</th>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600">Transacción</th>
-                                                <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600">No. Registros</th>
-                                                <th className="px-3 py-2 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600">BI Tarifa 0%</th>
-                                                <th className="px-3 py-2 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600">BI Tarifa 12%/15%</th>
-                                                <th className="px-3 py-2 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600">BI No Objeto IVA</th>
-                                                <th className="px-3 py-2 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor IVA</th>
+                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700">Cod.</th>
+                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700">Transacción</th>
+                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700">No. Registros</th>
+                                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700">BI Tarifa 0%</th>
+                                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700">BI Tarifa 12%/15%</th>
+                                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700">BI No Objeto IVA</th>
+                                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor IVA</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
+                                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                                             {consolidatedData.compras.map((row) => (
-                                                <tr key={row.cod} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                    <td className="px-3 py-2 text-center text-xs font-mono text-gray-500 dark:text-gray-400 border-r dark:border-gray-600">{row.cod}</td>
-                                                    <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-white border-r dark:border-gray-600">{row.transaccion}</td>
-                                                    <td className="px-3 py-2 text-center text-xs text-gray-500 dark:text-gray-400 border-r dark:border-gray-600">{row.count}</td>
-                                                    <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(row.bi0)}</td>
-                                                    <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(row.bi12)}</td>
-                                                    <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(row.biNoObj)}</td>
-                                                    <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white">{formatMoney(row.montoIva)}</td>
+                                                <tr key={row.cod} className="hover:bg-sri-blue/5 dark:hover:bg-sri-blue/10 transition-colors">
+                                                    <td className="px-3 py-3 text-center text-xs font-bold text-sri-blue dark:text-sri-blue-light border-r dark:border-gray-700">{row.cod}</td>
+                                                    <td className="px-3 py-3 text-xs font-medium text-gray-900 dark:text-white border-r dark:border-gray-700">{row.transaccion}</td>
+                                                    <td className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400 border-r dark:border-gray-700">{row.count}</td>
+                                                    <td className="px-3 py-3 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-700">{formatMoney(row.bi0)}</td>
+                                                    <td className="px-3 py-3 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-700">{formatMoney(row.bi12)}</td>
+                                                    <td className="px-3 py-3 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-700">{formatMoney(row.biNoObj)}</td>
+                                                    <td className="px-3 py-3 text-right text-xs font-mono text-gray-900 dark:text-white">{formatMoney(row.montoIva)}</td>
                                                 </tr>
                                             ))}
-                                            <tr className="bg-gray-50 dark:bg-gray-700 font-bold border-t-2 border-gray-300 dark:border-gray-500">
-                                                <td colSpan={3} className="px-3 py-2 text-right text-xs text-gray-700 dark:text-white uppercase border-r dark:border-gray-600">TOTAL:</td>
-                                                <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(consolidatedData.totals.compras.bi0)}</td>
-                                                <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(consolidatedData.totals.compras.bi12)}</td>
-                                                <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(consolidatedData.totals.compras.biNoObj)}</td>
-                                                <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white">{formatMoney(consolidatedData.totals.compras.montoIva)}</td>
+                                            <tr className="bg-sri-gold/10 dark:bg-sri-gold/5 font-bold border-t-2 border-sri-gold">
+                                                <td colSpan={3} className="px-3 py-3 text-right text-xs text-sri-blue dark:text-sri-gold uppercase border-r dark:border-gray-700">TOTAL COMPRAS:</td>
+                                                <td className="px-3 py-3 text-right text-xs font-mono text-sri-blue dark:text-sri-gold border-r dark:border-gray-700">{formatMoney(consolidatedData.totals.compras.bi0)}</td>
+                                                <td className="px-3 py-3 text-right text-xs font-mono text-sri-blue dark:text-sri-gold border-r dark:border-gray-700">{formatMoney(consolidatedData.totals.compras.bi12)}</td>
+                                                <td className="px-3 py-3 text-right text-xs font-mono text-sri-blue dark:text-sri-gold border-r dark:border-gray-700">{formatMoney(consolidatedData.totals.compras.biNoObj)}</td>
+                                                <td className="px-3 py-3 text-right text-xs font-mono text-sri-blue dark:text-sri-gold">{formatMoney(consolidatedData.totals.compras.montoIva)}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -984,35 +1111,35 @@ const AtsSummary: React.FC = () => {
                             </div>
 
                             {/* Table 2: Retenciones Renta */}
-                            <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 border-b border-gray-300 dark:border-gray-600 text-center font-bold text-gray-700 dark:text-gray-200 uppercase text-sm text-sri-blue-light">
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                                <div className="bg-sri-blue-light dark:bg-gray-700 px-4 py-3 text-center font-bold text-white uppercase text-sm tracking-wider">
                                     RETENCIÓN EN LA FUENTE DE IMPUESTO A LA RENTA
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                                        <thead className="bg-white dark:bg-gray-800">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
                                             <tr>
-                                                <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600 w-16">Cod.</th>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600">Concepto de Retención</th>
-                                                <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600 w-24">No. Registros</th>
-                                                <th className="px-3 py-2 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600 w-32">Base Imponible</th>
-                                                <th className="px-3 py-2 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">Valor Retenido</th>
+                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700 w-16">Cod.</th>
+                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700">Concepto de Retención</th>
+                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700 w-24">No. Registros</th>
+                                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700 w-32">Base Imponible</th>
+                                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">Valor Retenido</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
+                                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                                             {consolidatedData.retencionesRenta.map((row) => (
-                                                <tr key={row.cod} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                    <td className="px-3 py-2 text-center text-xs font-mono text-gray-500 dark:text-gray-400 border-r dark:border-gray-600">{row.cod}</td>
-                                                    <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-white border-r dark:border-gray-600">{row.concepto}</td>
-                                                    <td className="px-3 py-2 text-center text-xs text-gray-500 dark:text-gray-400 border-r dark:border-gray-600">{row.count}</td>
-                                                    <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(row.base)}</td>
-                                                    <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white">{formatMoney(row.valRet)}</td>
+                                                <tr key={row.cod} className="hover:bg-sri-blue/5 dark:hover:bg-sri-blue/10 transition-colors">
+                                                    <td className="px-3 py-3 text-center text-xs font-bold text-sri-blue dark:text-sri-blue-light border-r dark:border-gray-700">{row.cod}</td>
+                                                    <td className="px-3 py-3 text-xs font-medium text-gray-900 dark:text-white border-r dark:border-gray-700">{row.concepto}</td>
+                                                    <td className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400 border-r dark:border-gray-700">{row.count}</td>
+                                                    <td className="px-3 py-3 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-700">{formatMoney(row.base)}</td>
+                                                    <td className="px-3 py-3 text-right text-xs font-mono text-gray-900 dark:text-white">{formatMoney(row.valRet)}</td>
                                                 </tr>
                                             ))}
-                                            <tr className="bg-gray-50 dark:bg-gray-700 font-bold border-t-2 border-gray-300 dark:border-gray-500">
-                                                <td colSpan={3} className="px-3 py-2 text-right text-xs text-gray-700 dark:text-white uppercase border-r dark:border-gray-600">TOTAL:</td>
-                                                <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white border-r dark:border-gray-600">{formatMoney(consolidatedData.totals.retRenta.base)}</td>
-                                                <td className="px-3 py-2 text-right text-xs font-mono text-gray-900 dark:text-white">{formatMoney(consolidatedData.totals.retRenta.valRet)}</td>
+                                            <tr className="bg-sri-gold/10 dark:bg-sri-gold/5 font-bold border-t-2 border-sri-gold">
+                                                <td colSpan={3} className="px-3 py-3 text-right text-xs text-sri-blue dark:text-sri-gold uppercase border-r dark:border-gray-700">TOTAL RENTA:</td>
+                                                <td className="px-3 py-3 text-right text-xs font-mono text-sri-blue dark:text-sri-gold border-r dark:border-gray-700">{formatMoney(consolidatedData.totals.retRenta.base)}</td>
+                                                <td className="px-3 py-3 text-right text-xs font-mono text-sri-blue dark:text-sri-gold">{formatMoney(consolidatedData.totals.retRenta.valRet)}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -1020,34 +1147,34 @@ const AtsSummary: React.FC = () => {
                             </div>
 
                             {/* Table 3: Retenciones IVA */}
-                            <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 border-b border-gray-300 dark:border-gray-600 text-center font-bold text-gray-700 dark:text-gray-200 uppercase text-sm text-sri-blue-light">
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                                <div className="bg-sri-blue-light dark:bg-gray-700 px-4 py-3 text-center font-bold text-white uppercase text-sm tracking-wider">
                                     RETENCIÓN EN LA FUENTE DE IVA
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-                                        <thead className="bg-white dark:bg-gray-800">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
                                             <tr>
-                                                <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600 w-1/4">Operación</th>
-                                                <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-600 w-1/2">Concepto de Retención</th>
-                                                <th className="px-3 py-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/4">Valor Retenido</th>
+                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700 w-1/4">Operación</th>
+                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r dark:border-gray-700 w-1/2">Concepto de Retención</th>
+                                                <th className="px-3 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/4">Valor Retenido</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
+                                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                                             {consolidatedData.retencionesIva.map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                    <td className="px-3 py-2 text-center text-xs text-gray-900 dark:text-white border-r dark:border-gray-600">{row.operacion}</td>
-                                                    <td className="px-3 py-2 text-center text-xs text-gray-900 dark:text-white border-r dark:border-gray-600">{row.concepto}</td>
-                                                    <td className="px-3 py-2 text-center text-xs font-mono text-gray-900 dark:text-white">{formatMoney(row.valRet)}</td>
+                                                <tr key={idx} className="hover:bg-sri-blue/5 dark:hover:bg-sri-blue/10 transition-colors">
+                                                    <td className="px-3 py-3 text-center text-xs font-medium text-gray-900 dark:text-white border-r dark:border-gray-700">{row.operacion}</td>
+                                                    <td className="px-3 py-3 text-center text-xs font-medium text-gray-900 dark:text-white border-r dark:border-gray-700">{row.concepto}</td>
+                                                    <td className="px-3 py-3 text-center text-xs font-mono text-gray-900 dark:text-white">{formatMoney(row.valRet)}</td>
                                                 </tr>
                                             ))}
-                                            <tr className="bg-gray-50 dark:bg-gray-700 font-bold border-t-2 border-gray-300 dark:border-gray-500">
-                                                <td colSpan={2} className="px-3 py-2 text-right text-xs text-gray-700 dark:text-white uppercase border-r dark:border-gray-600">TOTAL:</td>
-                                                <td className="px-3 py-2 text-center text-xs font-mono text-gray-900 dark:text-white">{formatMoney(consolidatedData.totals.retIva)}</td>
+                                            <tr className="bg-sri-gold/10 dark:bg-sri-gold/5 font-bold border-t-2 border-sri-gold">
+                                                <td colSpan={2} className="px-3 py-3 text-right text-xs text-sri-blue dark:text-sri-gold uppercase border-r dark:border-gray-700">TOTAL IVA:</td>
+                                                <td className="px-3 py-3 text-center text-xs font-mono text-sri-blue dark:text-sri-gold">{formatMoney(consolidatedData.totals.retIva)}</td>
                                             </tr>
-                                            <tr className="bg-sri-gold/20 dark:bg-sri-gold/10 font-bold border-t border-sri-gold">
-                                                <td colSpan={2} className="px-3 py-2 text-left text-xs text-gray-900 dark:text-white uppercase border-r border-sri-gold/50">TOTAL IMPUESTO A PAGAR POR RETENCIÓN (Renta + IVA)</td>
-                                                <td className="px-3 py-2 text-center text-xs font-mono text-gray-900 dark:text-white">{formatMoney(consolidatedData.totals.retRenta.valRet + consolidatedData.totals.retIva)}</td>
+                                            <tr className="bg-sri-blue/10 dark:bg-sri-blue/20 font-bold border-t-2 border-sri-blue">
+                                                <td colSpan={2} className="px-3 py-4 text-right text-xs text-sri-blue dark:text-sri-blue-light uppercase border-r border-sri-blue/50">TOTAL IMPUESTO A PAGAR POR RETENCIÓN (Renta + IVA)</td>
+                                                <td className="px-3 py-4 text-center text-sm font-mono text-sri-blue dark:text-sri-blue-light">{formatMoney(consolidatedData.totals.retRenta.valRet + consolidatedData.totals.retIva)}</td>
                                             </tr>
                                         </tbody>
                                     </table>

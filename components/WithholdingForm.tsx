@@ -487,54 +487,72 @@ const WithholdingForm: React.FC = () => {
         
         const styles = {
             title: {
-                font: { bold: true, sz: 16, color: { rgb: "FFFFFF" }, name: "Arial" },
+                font: { bold: true, sz: 18, color: { rgb: "FFFFFF" }, name: "Arial" },
                 fill: { fgColor: { rgb: "003366" } }, // SRI Blue
-                alignment: { horizontal: "center", vertical: "center" }
+                alignment: { horizontal: "center", vertical: "center" },
+                border: { bottom: { style: "medium", color: { rgb: "d4a017" } } }
             },
             metaInfo: {
                 font: { bold: true, sz: 11, name: "Arial", color: { rgb: "333333" } },
+                fill: { fgColor: { rgb: "F9FAFB" } },
                 alignment: { vertical: "center" }
             },
             headerMonth: {
                 font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 10 },
                 fill: { fgColor: { rgb: "00A6FB" } }, // Light Blue
                 alignment: { horizontal: "center", vertical: "center" },
-                border: borders
+                border: { 
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } }
+                }
             },
             headerSub: {
                 font: { bold: true, sz: 9, name: "Arial", color: { rgb: "555555" } },
                 fill: { fgColor: { rgb: "E5E7EB" } }, // Gray 200
                 alignment: { horizontal: "center", vertical: "center" },
-                border: borders
+                border: { 
+                    bottom: { style: "medium", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } }
+                }
             },
             sectionTitle: {
-                font: { bold: true, color: { rgb: "003366" }, name: "Arial", sz: 11 },
-                fill: { fgColor: { rgb: "FFD700" } }, // SRI Gold
+                font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 11 },
+                fill: { fgColor: { rgb: "d4a017" } }, // SRI Gold
                 alignment: { horizontal: "left", vertical: "center" },
-                border: borders
+                border: { 
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } }
+                }
             },
             cellText: {
                 font: { name: "Arial", sz: 10 },
                 alignment: { wrapText: true, vertical: "center" },
-                border: borders
+                border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } }
             },
             cellCode: {
-                font: { name: "Courier New", sz: 10, bold: true, color: { rgb: "555555" } },
+                font: { name: "Courier New", sz: 10, bold: true, color: { rgb: "003366" } },
                 alignment: { horizontal: "center", vertical: "center" },
-                border: borders
+                fill: { fgColor: { rgb: "F3F4F6" } },
+                border: { bottom: { style: "thin", color: { rgb: "D1D5DB" } } }
             },
             cellNumber: {
                 font: { name: "Arial", sz: 10 },
                 alignment: { horizontal: "right", vertical: "center" },
                 numFmt: "#,##0.00",
-                border: borders
+                border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } }
             },
             cellTotalNumber: {
-                font: { name: "Arial", sz: 10, bold: true },
+                font: { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } },
                 alignment: { horizontal: "right", vertical: "center" },
                 numFmt: "#,##0.00",
-                fill: { fgColor: { rgb: "F3F4F6" } }, // Very light gray
-                border: borders
+                fill: { fgColor: { rgb: "FEF3C7" } }, // Light gold
+                border: { 
+                    top: { style: "thin", color: { rgb: "d4a017" } },
+                    bottom: { style: "medium", color: { rgb: "d4a017" } }
+                }
             }
         };
 
@@ -694,53 +712,65 @@ const WithholdingForm: React.FC = () => {
 
                     {/* Table */}
                     <div className="p-4 overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-2/5">Descripción</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cas. Base</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Base Imponible</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cas. Ret</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Valor Retenido</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {withholdingStructure.map((row, index) => {
-                                    if (row.isTitle) {
+                        <div className="rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-800">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-2/5">Descripción</th>
+                                        <th className="px-4 py-4 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cas. Base</th>
+                                        <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Base Imponible</th>
+                                        <th className="px-4 py-4 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cas. Ret</th>
+                                        <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor Retenido</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {withholdingStructure.map((row, index) => {
+                                        if (row.isTitle) {
+                                            return (
+                                                <tr key={index} className="bg-sri-blue/5 dark:bg-gray-800">
+                                                    <td colSpan={5} className="px-6 py-3 text-sm font-bold text-sri-blue dark:text-sri-gold uppercase tracking-wide border-l-4 border-sri-blue">{row.description}</td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        const valBase = row.baseField ? (dataToDisplay[row.baseField.id] || 0) : 0;
+                                        const valRet = row.retentionField ? (dataToDisplay[row.retentionField.id] || 0) : 0;
+
+                                        if (valBase === 0 && valRet === 0) return null;
+
                                         return (
-                                            <tr key={index} className="bg-gray-100 dark:bg-gray-700">
-                                                <td colSpan={5} className="px-6 py-2 text-sm font-bold text-sri-blue dark:text-sri-gold uppercase">{row.description}</td>
+                                            <tr key={index} className={`transition-all duration-200 ${row.isTotal ? "bg-sri-gold/10 dark:bg-sri-gold/5 border-l-4 border-sri-gold" : "hover:bg-sri-blue/5 dark:hover:bg-sri-blue/10"}`}>
+                                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                                    <p className={row.isTotal ? 'font-bold text-sri-blue dark:text-sri-gold' : 'font-medium'}>{row.description}</p>
+                                                </td>
+                                                
+                                                <td className="px-4 py-4 text-center text-xs font-mono">
+                                                    {row.baseField && (
+                                                        <span className={`px-2 py-1 rounded font-bold border ${row.isTotal ? 'bg-sri-gold/20 text-sri-gold border-sri-gold/30' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600'}`}>
+                                                            {row.baseField.id}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className={`px-6 py-4 text-right text-sm font-mono ${row.isTotal ? 'font-bold text-sri-blue dark:text-sri-gold' : 'text-gray-900 dark:text-white'}`}>
+                                                    {valBase !== 0 ? formatNumber(valBase) : '-'}
+                                                </td>
+                                                
+                                                <td className="px-4 py-4 text-center text-xs font-mono">
+                                                    {row.retentionField && (
+                                                        <span className={`px-2 py-1 rounded font-bold border ${row.isTotal ? 'bg-sri-gold/20 text-sri-gold border-sri-gold/30' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600'}`}>
+                                                            {row.retentionField.id}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className={`px-6 py-4 text-right text-sm font-mono ${row.isTotal ? 'font-bold text-sri-blue dark:text-sri-gold' : 'text-gray-900 dark:text-white'}`}>
+                                                    {valRet !== 0 ? formatNumber(valRet) : '-'}
+                                                </td>
                                             </tr>
                                         );
-                                    }
-
-                                    const valBase = row.baseField ? (dataToDisplay[row.baseField.id] || 0) : 0;
-                                    const valRet = row.retentionField ? (dataToDisplay[row.retentionField.id] || 0) : 0;
-
-                                    if (valBase === 0 && valRet === 0) return null;
-
-                                    return (
-                                        <tr key={index} className={row.isTotal ? "bg-sri-gold/20 font-bold dark:bg-sri-gold/10" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"}>
-                                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{row.description}</td>
-                                            
-                                            <td className="px-4 py-4 text-center text-xs font-mono text-gray-500 dark:text-gray-400">
-                                                {row.baseField && <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-600 border border-gray-200 dark:border-gray-500">{row.baseField.id}</span>}
-                                            </td>
-                                            <td className="px-6 py-4 text-right text-sm font-mono text-gray-900 dark:text-white">
-                                                {valBase !== 0 ? formatNumber(valBase) : '-'}
-                                            </td>
-                                            
-                                            <td className="px-4 py-4 text-center text-xs font-mono text-gray-500 dark:text-gray-400">
-                                                {row.retentionField && <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-600 border border-gray-200 dark:border-gray-500">{row.retentionField.id}</span>}
-                                            </td>
-                                            <td className="px-6 py-4 text-right text-sm font-mono text-gray-900 dark:text-white">
-                                                {valRet !== 0 ? formatNumber(valRet) : '-'}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </>
             ) : (

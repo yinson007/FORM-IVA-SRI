@@ -385,13 +385,64 @@ const AnnualReport: React.FC = () => {
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
         const styles = {
-            title: { font: { bold: true, sz: 16, color: { rgb: "FFFFFF" }, name: "Arial" }, fill: { fgColor: { rgb: "003366" } }, alignment: { horizontal: "center", vertical: "center" } },
-            metaInfo: { font: { bold: true, sz: 11, name: "Arial" } },
-            header: { font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial" }, fill: { fgColor: { rgb: "00A6FB" } }, alignment: { horizontal: "center" }, border: { bottom: { style: "thin" }, right: { style: "thin" } } },
-            sectionTitle: { font: { bold: true, color: { rgb: "003366" }, name: "Arial" }, fill: { fgColor: { rgb: "FFD700" } }, border: { bottom: { style: "medium" } } },
-            cellText: { font: { name: "Arial", sz: 10 }, alignment: { wrapText: true, vertical: "center" }, border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } },
-            cellCode: { font: { name: "Courier New", sz: 10, bold: true, color: { rgb: "555555" } }, alignment: { horizontal: "center", vertical: "center" }, border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } },
-            cellNumber: { font: { name: "Arial", sz: 10 }, alignment: { horizontal: "right", vertical: "center" }, numFmt: "#,##0.00", border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } }
+            title: { 
+                font: { bold: true, sz: 18, color: { rgb: "FFFFFF" }, name: "Arial" }, 
+                fill: { fgColor: { rgb: "003366" } }, 
+                alignment: { horizontal: "center", vertical: "center" },
+                border: { bottom: { style: "medium", color: { rgb: "d4a017" } } }
+            },
+            metaInfo: { 
+                font: { bold: true, sz: 11, name: "Arial", color: { rgb: "333333" } },
+                fill: { fgColor: { rgb: "F9FAFB" } },
+                alignment: { vertical: "center" }
+            },
+            header: { 
+                font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 10 }, 
+                fill: { fgColor: { rgb: "00A6FB" } }, 
+                alignment: { horizontal: "center", vertical: "center" }, 
+                border: { 
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "medium", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } }
+                } 
+            },
+            sectionTitle: { 
+                font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 11 }, 
+                fill: { fgColor: { rgb: "d4a017" } }, 
+                alignment: { vertical: "center" },
+                border: { 
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } }
+                } 
+            },
+            cellText: { 
+                font: { name: "Arial", sz: 10 }, 
+                alignment: { wrapText: true, vertical: "center" }, 
+                border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } 
+            },
+            cellCode: { 
+                font: { name: "Courier New", sz: 10, bold: true, color: { rgb: "003366" } }, 
+                alignment: { horizontal: "center", vertical: "center" }, 
+                fill: { fgColor: { rgb: "F3F4F6" } },
+                border: { bottom: { style: "thin", color: { rgb: "D1D5DB" } } } 
+            },
+            cellNumber: { 
+                font: { name: "Arial", sz: 10 }, 
+                alignment: { horizontal: "right", vertical: "center" }, 
+                numFmt: "#,##0.00", 
+                border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } } 
+            },
+            cellTotal: {
+                font: { bold: true, name: "Arial", sz: 10, color: { rgb: "000000" } },
+                fill: { fgColor: { rgb: "FEF3C7" } }, // Light gold
+                alignment: { horizontal: "right", vertical: "center" },
+                numFmt: "#,##0.00",
+                border: { 
+                    top: { style: "thin", color: { rgb: "d4a017" } },
+                    bottom: { style: "medium", color: { rgb: "d4a017" } }
+                }
+            }
         };
 
         if (!ws['!merges']) ws['!merges'] = [];
@@ -420,9 +471,13 @@ const AnnualReport: React.FC = () => {
                      const cellValue = ws[cellRef].v;
                     if (C === 0 && typeof cellValue === 'string' && (cellValue.includes("RESUMEN DE") || cellValue.includes("AGENTE DE"))) {
                         ws[cellRef].s = styles.sectionTitle;
+                        // Merge section title across all columns
+                        if (!ws['!merges']) ws['!merges'] = [];
+                        ws['!merges'].push({ s: { r: R, c: 0 }, e: { r: R, c: 14 } });
                     } else {
                         if (C === 0) ws[cellRef].s = styles.cellText;
                         else if (C === 1) ws[cellRef].s = styles.cellCode;
+                        else if (C === 14) ws[cellRef].s = styles.cellTotal;
                         else ws[cellRef].s = styles.cellNumber;
                     }
                 }
@@ -594,15 +649,15 @@ const AnnualReport: React.FC = () => {
                     </div>
                     
                     <div className="p-4">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-y-200 dark:divide-gray-700">
-                                <thead className="bg-gray-50 dark:bg-gray-700">
+                        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-800">
                                     <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-3/5">Descripción</th>
-                                        {structure.header.map(h => <th key={h.id} scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{h.description}</th>)}
+                                        <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-3/5">Descripción</th>
+                                        {structure.header.map(h => <th key={h.id} scope="col" className="px-6 py-4 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h.description}</th>)}
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                                     {structure.rows.map((row, index) => {
                                         // Dynamic row rendering based on number of fields (1 for Retentions, 2 for others)
                                         const values = row.fields.map(field => field ? (dataToDisplay[field.id] || 0) : 0);
@@ -610,19 +665,19 @@ const AnnualReport: React.FC = () => {
                                         if (allZero) return null;
                                         
                                         return (
-                                            <tr key={index} className={`transition-colors duration-150 ${row.isTotal ? "bg-sri-gold/20 dark:bg-sri-gold/10" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"}`}>
+                                            <tr key={index} className={`transition-all duration-200 ${row.isTotal ? "bg-sri-gold/10 dark:bg-sri-gold/5 border-l-4 border-sri-gold" : "hover:bg-sri-blue/5 dark:hover:bg-sri-blue/10"}`}>
                                                 <td className="px-6 py-4 whitespace-normal text-sm text-gray-700 dark:text-gray-300">
-                                                    <p className={row.isTotal ? 'font-bold' : ''}>{row.description}</p>
+                                                    <p className={row.isTotal ? 'font-bold text-sri-blue dark:text-sri-gold' : 'font-medium'}>{row.description}</p>
                                                     {row.note && <p className="text-xs text-gray-400 italic mt-1">{row.note}</p>}
                                                 </td>
                                                 {row.fields.map((field, i) => (
-                                                    <td key={i} className="px-6 py-4 whitespace-nowrap text-right text-sm font-mono text-gray-800 dark:text-gray-200">
+                                                    <td key={i} className={`px-6 py-4 whitespace-nowrap text-right text-sm font-mono ${row.isTotal ? 'font-bold text-sri-blue dark:text-sri-gold' : 'text-gray-800 dark:text-gray-200'}`}>
                                                         {field && (
-                                                            <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sri-blue-light/10 text-sri-blue dark:bg-sri-blue-light/20 dark:text-sri-blue-light border border-sri-blue-light/20">
+                                                            <span className={`mr-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${row.isTotal ? 'bg-sri-gold/20 text-sri-gold border-sri-gold/30' : 'bg-sri-blue/10 text-sri-blue dark:bg-sri-blue/20 dark:text-sri-blue-light border-sri-blue/20'} border`}>
                                                                 {field.id}
                                                             </span>
                                                         )}
-                                                        {values[i].toFixed(2)}
+                                                        {values[i].toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </td>
                                                 ))}
                                             </tr>
