@@ -126,6 +126,13 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
                 for (let i = 0; i < idMatches.length; i++) {
                     const id = idMatches[i].id;
                     const val = valueMatches[i].value;
+
+                    // AJUSTE: No extraer valores para 799 y 800 directamente del PDF
+                    if (id === "799" || id === "800") {
+                        console.log(`DEBUG: Omitiendo extracción directa de casillero ${id} (formato agrupado)`);
+                        continue;
+                    }
+
                     // Solo guardamos si no tenemos un valor mejor (distinto de cero)
                     if (dataMap[id] === undefined || dataMap[id] === 0) {
                         dataMap[id] = val;
@@ -148,6 +155,14 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
                     );
                     
                     if (valuesForThisId.length > 0) {
+                        const id = currentId.id;
+                        
+                        // AJUSTE: No extraer valores para 799 y 800 directamente del PDF
+                        if (id === "799" || id === "800") {
+                            console.log(`DEBUG: Omitiendo extracción directa de casillero ${id}`);
+                            continue;
+                        }
+
                         // Si hay varios valores, tomamos el primero (el más cercano al ID)
                         // A menos que el primero sea igual al ID (error de duplicación en PDF)
                         let selectedValue = valuesForThisId[0].value;
@@ -159,7 +174,6 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
 
                         console.log(`DEBUG: Casillero ${currentId.id} emparejado con valor ${selectedValue} (de valores: ${valuesForThisId.map(v => v.value).join(', ')})`);
 
-                        const id = currentId.id;
                         if (dataMap[id] === undefined || dataMap[id] === 0) {
                             dataMap[id] = selectedValue;
                         }
@@ -169,6 +183,15 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
         }
     }
     // --- FIN DE LÓGICA DE EXTRACCIÓN ---
+
+    // AJUSTE: Calcular casillero 799 como suma de 721+723+725+727+729+731
+    const idsToSum = ["721", "723", "725", "727", "729", "731"];
+    const sum799 = idsToSum.reduce((acc, id) => acc + (dataMap[id] || 0), 0);
+    dataMap["799"] = sum799;
+    console.log(`DEBUG: Valor calculado para casillero 799: ${sum799} (Suma de ${idsToSum.join('+')})`);
+    
+    // Asegurar que 800 sea 0 si no se extrae (o dejarlo como undefined si se prefiere, pero el usuario pidió no extraerlo)
+    dataMap["800"] = dataMap["800"] || 0;
     
     // Regex para encontrar el período fiscal - Mejorado
     const periodoRegex = /(?:PER[ÍI]ODO|MES|A[ÑN]O|FISCAL)\s*[:\-]?\s*((?:ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\s+(\d{4})|(?:PRIMER|SEGUNDO)\s+SEMESTRE\s+(\d{4})|(?:\d{2})\/(?:\d{4}))/i;
