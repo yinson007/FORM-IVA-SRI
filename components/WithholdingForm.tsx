@@ -19,6 +19,7 @@ interface MonthlyData {
 }
 
 const MONTHS_ORDER = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+const SHORT_MONTHS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
 const WithholdingForm: React.FC = () => {
     const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
@@ -88,12 +89,38 @@ const WithholdingForm: React.FC = () => {
                 // Use the updated rule parser that supports 3 and 4 digit codes
                 const extracted = await extractDataWithRules(text);
                 
-                if (!extracted.periodo) {
+                let month = '';
+                let year = '';
+
+                if (extracted.periodo) {
+                    const parts = extracted.periodo.split(' ');
+                    month = parts[0];
+                    year = parts[1] || '';
+                } else {
+                    // Fallback: Intentar extraer del nombre del archivo
+                    const fileName = file.name.toUpperCase();
+                    for (const m of MONTHS_ORDER) {
+                        if (fileName.includes(m)) {
+                            month = m;
+                            break;
+                        }
+                    }
+                    if (!month) {
+                        for (let i = 0; i < SHORT_MONTHS.length; i++) {
+                            if (fileName.includes(SHORT_MONTHS[i])) {
+                                month = MONTHS_ORDER[i];
+                                break;
+                            }
+                        }
+                    }
+                    const yearMatch = fileName.match(/\b(20\d{2})\b/);
+                    if (yearMatch) year = yearMatch[1];
+                }
+
+                if (!month) {
                     console.warn(`No se pudo determinar el período para el archivo: ${file.name}`);
                     return null;
                 }
-                
-                const [month, year] = extracted.periodo.split(' ');
                 
                 // Basic validation to check if it looks like a withholding form
                 // Form 103 usually has specific codes like 302, 303, etc.
@@ -101,12 +128,11 @@ const WithholdingForm: React.FC = () => {
                 
                 if (!hasRelevance && Object.keys(extracted.data).length < 5) {
                      console.warn(`El archivo ${file.name} no parece contener datos de retenciones.`);
-                     // Return null or maybe try to accept it anyway? Let's accept if it has period.
                 }
 
                 return { 
                     month, 
-                    year, 
+                    year: year || new Date().getFullYear().toString(), 
                     fileName: file.name, 
                     data: extracted.data,
                     identificacion: extracted.identificacion,

@@ -134,14 +134,43 @@ const AnnualReport: React.FC = () => {
             try {
                 const text = await parsePdfText(file);
                 const extracted = await extractDataWithRules(text);
-                if (!extracted.periodo) {
-                    console.warn(`Could not determine period for file: ${file.name}`);
+                
+                let month = '';
+                let year = '';
+
+                if (extracted.periodo) {
+                    const parts = extracted.periodo.split(' ');
+                    month = parts[0];
+                    year = parts[1] || '';
+                } else {
+                    // Fallback: Intentar extraer del nombre del archivo
+                    const fileName = file.name.toUpperCase();
+                    for (const m of MONTHS_ORDER) {
+                        if (fileName.includes(m)) {
+                            month = m;
+                            break;
+                        }
+                    }
+                    if (!month) {
+                        for (let i = 0; i < SHORT_MONTHS.length; i++) {
+                            if (fileName.includes(SHORT_MONTHS[i])) {
+                                month = MONTHS_ORDER[i];
+                                break;
+                            }
+                        }
+                    }
+                    const yearMatch = fileName.match(/\b(20\d{2})\b/);
+                    if (yearMatch) year = yearMatch[1];
+                }
+
+                if (!month) {
+                    console.warn(`No se pudo determinar el mes para el archivo: ${file.name}`);
                     return null;
                 }
-                const [month, year] = extracted.periodo.split(' ');
+
                 return { 
                     month, 
-                    year, 
+                    year: year || new Date().getFullYear().toString(), 
                     fileName: file.name, 
                     data: extracted.data,
                     identificacion: extracted.identificacion,
