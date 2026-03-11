@@ -78,31 +78,48 @@ export async function extractDataWithRules(text: string): Promise<ExtractedData>
   return new Promise((resolve) => {
     const dataMap: Record<string, number> = {};
 
-    // 1. Extraer todos los IDs de casilleros (3 o 4 dígitos) con sus posiciones
+    // 0. Identificar y excluir líneas de fórmulas informativas (ej: (411+412+420+435+415+416+417+418) / 419)
+    const lines = text.split('\n');
+    const formulaRanges: { start: number, end: number }[] = [];
+    let tempPos = 0;
+    for (const line of lines) {
+        // Si la línea parece una fórmula (paréntesis, signos más, división y varios números de casilleros)
+        if (line.includes('(') && line.includes('+') && line.includes('/') && (line.match(/\b\d{3,4}\b/g)?.length || 0) > 3) {
+            formulaRanges.push({ start: tempPos, end: tempPos + line.length });
+        }
+        tempPos += line.length + 1;
+    }
+
+    const isInsideFormula = (index: number) => formulaRanges.some(r => index >= r.start && index <= r.end);
+
+    // 1. Extraer todos los IDs de casilleros (3 o 4 dígitos) con sus posiciones, ignorando fórmulas
     const allIds: { id: string, index: number, length: number }[] = [];
     const idRegex = /\b(\d{3,4})\b/g;
     let m;
     while ((m = idRegex.exec(text)) !== null) {
-        allIds.push({ id: m[1], index: m.index, length: m[0].length });
+        if (!isInsideFormula(m.index)) {
+            allIds.push({ id: m[1], index: m.index, length: m[0].length });
+        }
     }
 
-    // 2. Extraer todos los posibles valores numéricos con sus posiciones
+    // 2. Extraer todos los posibles valores numéricos con sus posiciones, ignorando fórmulas
     const allValues: { value: number, index: number, length: number, str: string }[] = [];
     const valueRegex = /-?[\d]+(?:[.,][\d]+)+|-?[\d]+/g;
     while ((m = valueRegex.exec(text)) !== null) {
-        const valStr = m[0];
-        const valIndex = m.index;
-        
-        // Un número solo es un "valor" si NO es uno de los IDs que ya identificamos
-        const isId = allIds.some(idM => idM.index === valIndex && idM.length === valStr.length);
-        if (isId) continue;
+        if (!isInsideFormula(m.index)) {
+            const valStr = m[0];
+            const valIndex = m.index;
+            
+            // Un número solo es un "valor" si NO es uno de los IDs que ya identificamos
+            const isId = allIds.some(idM => idM.index === valIndex && idM.length === valStr.length);
+            if (isId) continue;
 
-        const value = cleanAndParseValue(valStr);
-        allValues.push({ value, index: valIndex, length: valStr.length, str: valStr });
+            const value = cleanAndParseValue(valStr);
+            allValues.push({ value, index: valIndex, length: valStr.length, str: valStr });
+        }
     }
 
     // 3. Lógica de Emparejamiento por Líneas (Más precisa para la mayoría de PDFs del SRI)
-    const lines = text.split('\n');
     let currentPos = 0;
     
     for (const line of lines) {
